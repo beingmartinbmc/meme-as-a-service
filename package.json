@@ -33,7 +33,7 @@
     "api",
     "templates"
   ],
-  "author": "Your Name",
+  "author": "Ankit Sharma <ankit.sharma199803@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "sharp": "^0.32.6",
@@ -63,10 +63,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/meme-as-a-service.git"
+    "url": "https://github.com/beingmartinbmc/meme-as-a-service.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/meme-as-a-service/issues"
+    "url": "https://github.com/beingmartinbmc/meme-as-a-service/issues"
   },
-  "homepage": "https://github.com/yourusername/meme-as-a-service#readme"
+  "homepage": "https://github.com/beingmartinbmc/meme-as-a-service#readme"
 }
