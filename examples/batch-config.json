@@ -1,0 +1,37 @@
+[
+  {
+    "template": "drake",
+    "topText": "Writing unit tests",
+    "bottomText": "Skipping straight to prod",
+    "output": "drake-test-meme.png"
+  },
+  {
+    "template": "doge",
+    "topText": "Much code",
+    "bottomText": "Very bug",
+    "output": "doge-bug-meme.png"
+  },
+  {
+    "template": "distracted-boyfriend",
+    "topText": "My girlfriend",
+    "bottomText": "JavaScript",
+    "output": "distracted-js-meme.png"
+  },
+  {
+    "template": "two-buttons",
+    "topText": "Write clean code",
+    "bottomText": "Ship it anyway",
+    "output": "two-buttons-code-meme.png"
+  },
+  {
+    "template": "change-my-mind",
+    "topText": "TypeScript is better than JavaScript",
+    "output": "change-mind-ts-meme.png"
+  },
+  {
+    "template": "one-does-not-simply",
+    "topText": "One does not simply",
+    "bottomText": "Write bug-free code",
+    "output": "one-does-not-simply-bug-meme.png"
+  }
+]
