@@ -14,7 +14,7 @@ The project uses Sharp for high-performance image processing and SVG for text re
 
 ## Features ✨
 
-- 🎨 **Multiple Templates**: Drake, Distracted Boyfriend, Doge, Two Buttons, and more
+- 🎨 **Multiple Templates**: Drake, Distracted Boyfriend, Doge, Two Buttons, Change My Mind, One Does Not Simply
 - 📝 **Text Rendering**: Automatic text wrapping, font scaling, and stroke effects
 - 🚀 **Multiple Interfaces**: Library, CLI, and REST API
 - 🔄 **Batch Generation**: Generate multiple memes at once
@@ -46,7 +46,7 @@ The project uses Sharp for high-performance image processing and SVG for text re
 
 ### From Source
 ```bash
-git clone https://github.com/yourusername/meme-as-a-service.git
+git clone https://github.com/beingmartinbmc/meme-as-a-service.git
 cd meme-as-a-service
 npm install
 npm run build
@@ -67,7 +67,7 @@ npm install meme-as-a-service
 npm install meme-as-a-service
 
 # Or clone and build from source
-git clone https://github.com/yourusername/meme-as-a-service.git
+git clone https://github.com/beingmartinbmc/meme-as-a-service.git
 cd meme-as-a-service
 npm install
 npm run build
@@ -352,10 +352,13 @@ curl "http://localhost:3000/meme/drake?top=Writing%20tests&bottom=Skipping%20tes
 ```javascript
 const { 
   generateMeme, 
-  generateMemeAndSave,
+  generateMemeWithMetadata,
   generateBatchMemes,
   getAvailableTemplates,
-  getConfig 
+  searchAvailableTemplates,
+  getTemplateInfo,
+  addCustomTemplate,
+  MemeGenerator 
 } = require("meme-as-a-service");
 
 // Basic usage - returns buffer
@@ -365,12 +368,12 @@ const buffer = await generateMeme({
   bottomText: "Skipping straight to prod",
 });
 
-// Save to configured output directory
-const { result, filePath } = await generateMemeAndSave({
+// Get full result with metadata
+const result = await generateMemeWithMetadata({
   template: "drake",
   topText: "Hello",
   bottomText: "World"
-}, "my-meme.png");
+});
 
 // With custom styling
 const customBuffer = await generateMeme({
@@ -400,12 +403,22 @@ const batchResult = await generateBatchMemes({
 const templates = getAvailableTemplates();
 console.log(templates); // ['drake', 'distracted-boyfriend', 'doge', ...]
 
-// Configuration management
-const config = await getConfig();
-await config.update({
-  outputDirectory: './my-memes',
-  defaultFontSize: 50
-});
+// Search templates
+const searchResults = searchAvailableTemplates('drake');
+
+// Get template info
+const templateInfo = getTemplateInfo('drake');
+
+// Add custom template
+await addCustomTemplate(
+  'my-meme',
+  './my-template.png',
+  {
+    top: { x: 100, y: 50, width: 400, height: 150 },
+    bottom: { x: 100, y: 300, width: 400, height: 150 }
+  },
+  { description: 'My custom meme', tags: ['custom'] }
+);
 ```
 
 ### CLI Usage
@@ -425,9 +438,6 @@ npx meme-as-a-service generate drake \
   --color "#FF6B6B" \
   --stroke "#2C3E50" \
   --stroke-width 3
-
-# Quick generation (shorthand)
-npx meme-as-a-service drake -t "Hello" -b "World"
 
 # List templates
 npx meme-as-a-service list
@@ -534,12 +544,10 @@ npx meme-as-a-service template add \
 
 #### 3. Programmatic
 ```javascript
-const { DynamicTemplateLoader } = require('meme-as-a-service');
-
-const loader = new DynamicTemplateLoader();
+const { addCustomTemplate } = require('meme-as-a-service');
 
 // Add from file
-await loader.addTemplateFromFile(
+await addCustomTemplate(
   'my-meme',
   './my-template.png',
   {
@@ -548,13 +556,6 @@ await loader.addTemplateFromFile(
   },
   { description: 'My custom meme', tags: ['custom'] }
 );
-
-// Add from URL
-await loader.addTemplateFromUrl({
-  name: 'my-meme',
-  url: 'https://example.com/meme.png',
-  description: 'Downloaded meme'
-});
 ```
 
 ### Template Management Commands
@@ -605,62 +606,37 @@ The library comes with 6 popular meme templates, each with optimized text positi
 - **Dimensions**: 800x600
 - **Description**: Much wow, very doge
 - **Text Areas**: Top and bottom text boxes
-- **Best For**: Doge-style humor, random thoughts
+- **Best For**: Internet humor, casual memes
 - **Tags**: doge, shibe, wow
 
 ### Two Buttons
 - **Template**: `two-buttons`
-- **Dimensions**: 1000x600
-- **Description**: Two buttons choice meme
+- **Dimensions**: 800x600
+- **Description**: Two buttons decision meme
 - **Text Areas**: Top and bottom text boxes
-- **Best For**: Decision making, choice scenarios
-- **Tags**: buttons, choice, decision
+- **Best For**: Decision making, dilemmas
+- **Tags**: buttons, decision, dilemma
 
 ### Change My Mind
 - **Template**: `change-my-mind`
-- **Dimensions**: 1000x600
-- **Description**: Steven Crowder change my mind
-- **Text Areas**: Top text only
+- **Dimensions**: 800x600
+- **Description**: Steven Crowder change my mind meme
+- **Text Areas**: Top text box only
 - **Best For**: Opinions, debates, hot takes
-- **Tags**: crowder, change, mind, debate
+- **Tags**: change, mind, opinion, debate
 
 ### One Does Not Simply
 - **Template**: `one-does-not-simply`
 - **Dimensions**: 800x600
-- **Description**: Boromir one does not simply
+- **Description**: Boromir one does not simply meme
 - **Text Areas**: Top and bottom text boxes
-- **Best For**: Impossibility jokes, difficulty scenarios
-- **Tags**: boromir, lotr, simply
-
-### Template Usage Examples
-
-```javascript
-// Drake meme for testing vs production
-const drakeMeme = await generateMeme({
-  template: 'drake',
-  topText: 'Writing unit tests',
-  bottomText: 'Skipping straight to prod'
-});
-
-// Distracted boyfriend for programming languages
-const distractedMeme = await generateMeme({
-  template: 'distracted-boyfriend',
-  topText: 'My girlfriend',
-  bottomText: 'JavaScript'
-});
-
-// Doge for random thoughts
-const dogeMeme = await generateMeme({
-  template: 'doge',
-  topText: 'Much code',
-  bottomText: 'Very bug'
-});
-```
+- **Best For**: Impossibility jokes, sarcasm
+- **Tags**: boromir, lotr, impossible
 
 ## Configuration ⚙️
 
 ### Configuration File
-The library uses a configuration file (`meme-config.json`) to manage settings:
+Create a `meme-config.json` file in your project root:
 
 ```json
 {
@@ -674,125 +650,21 @@ The library uses a configuration file (`meme-config.json`) to manage settings:
 }
 ```
 
-### MemeOptions
-
+### MemeOptions Interface
 ```typescript
 interface MemeOptions {
-  template: string;           // Template name (required)
-  topText?: string;          // Top text
-  bottomText?: string;       // Bottom text
+  template: string;           // Template name
+  topText?: string;          // Top text content
+  bottomText?: string;       // Bottom text content
   fontSize?: number;         // Font size (default: 40)
   fontFamily?: string;       // Font family (default: Impact)
-  textColor?: string;        // Text color (default: white)
-  strokeColor?: string;      // Stroke color (default: black)
+  textColor?: string;        // Text color (default: #FFFFFF)
+  strokeColor?: string;      // Stroke color (default: #000000)
   strokeWidth?: number;      // Stroke width (default: 2)
-  maxWidth?: number;         // Max text width
-  quality?: number;          // Image quality (1-100)
+  maxWidth?: number;         // Maximum text width
+  quality?: number;          // Output quality (1-100)
 }
 ```
-
-### Configuration Management
-
-```javascript
-const { getConfig } = require('meme-as-a-service');
-
-// Get current configuration
-const config = await getConfig();
-const settings = config.get();
-
-// Update configuration
-await config.update({
-  outputDirectory: './my-memes',
-  defaultFontSize: 50
-});
-```
-
-## Batch Generation 📦
-
-Create a JSON file for batch generation:
-
-```json
-[
-  {
-    "template": "drake",
-    "topText": "Writing tests",
-    "bottomText": "Skipping tests",
-    "output": "test-meme.png"
-  },
-  {
-    "template": "doge",
-    "topText": "Much code",
-    "bottomText": "Very bug",
-    "output": "bug-meme.png"
-  }
-]
-```
-
-Then run:
-```bash
-npx meme-as-a-service batch -f memes.json -o ./output
-```
-
-## Custom Templates 🎯
-
-### Adding Custom Templates via API
-
-```bash
-curl -X POST "http://localhost:3000/templates" \
-  -F "name=my-template" \
-  -F "image=@template.png" \
-  -F "description=My custom template" \
-  -F "tags=custom,funny" \
-  -F "topBox={\"x\":100,\"y\":50,\"width\":400,\"height\":200}" \
-  -F "bottomBox={\"x\":100,\"y\":300,\"width\":400,\"height\":200}"
-```
-
-### Adding Custom Templates via Library
-
-```javascript
-const { addCustomTemplate } = require("meme-as-a-service");
-
-await addCustomTemplate(
-  "my-template",
-  "./template.png",
-  {
-    top: {
-      x: 100,
-      y: 50,
-      width: 400,
-      height: 200,
-      fontSize: 40,
-      fontFamily: "Impact",
-      textColor: "#FFFFFF",
-      strokeColor: "#000000",
-      strokeWidth: 2
-    },
-    bottom: {
-      x: 100,
-      y: 300,
-      width: 400,
-      height: 200,
-      fontSize: 40,
-      fontFamily: "Impact",
-      textColor: "#FFFFFF",
-      strokeColor: "#000000",
-      strokeWidth: 2
-    }
-  },
-  {
-    description: "My custom template",
-    tags: ["custom", "funny"]
-  }
-);
-```
-
-### Template Requirements
-
-- **Image Format**: PNG or JPG
-- **Quality**: High resolution (at least 800x600 pixels)
-- **Content**: Clean meme template without text overlays
-- **Text Boxes**: Define coordinates for top and/or bottom text areas
-- **Metadata**: Include description and tags for better organization
 
 ## API Endpoints 🌐
 
@@ -840,7 +712,7 @@ meme-as-a-service/
 ### Setup
 
 ```bash
-git clone https://github.com/yourusername/meme-as-a-service.git
+git clone https://github.com/beingmartinbmc/meme-as-a-service.git
 cd meme-as-a-service
 npm install
 npm run build
@@ -893,39 +765,25 @@ npm test
 
 # Run tests with coverage
 npm run test -- --coverage
-
-# Run specific test file
-npm test -- meme-generator.test.ts
 ```
-
-## Contributing 🤝
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## License 📄
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## Support 💬
+## Roadmap 🚀
 
-- 📧 Email: your-email@example.com
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/meme-as-a-service/issues)
-- 📖 Documentation: [GitHub Wiki](https://github.com/yourusername/meme-as-a-service/wiki)
-
-## Roadmap 🗺️
-
-- [ ] Add more meme templates
-- [ ] AI-powered meme captioning
-- [ ] Slack/Discord bot integrations
-- [ ] Web UI for meme creation
 - [ ] Template marketplace
-- [ ] Video meme support
+- [ ] AI-powered caption generation
+- [ ] GIF and video meme support
+- [ ] Cloud storage integration
+- [ ] Advanced text effects
+- [ ] Plugin system
+- [ ] Analytics and usage tracking
+- [ ] Mobile app support
 - [ ] Social media integration
+- [ ] Community features
 
 ---
 
-Made with ❤️ for the meme community
+**Made with ❤️ for the meme community**
