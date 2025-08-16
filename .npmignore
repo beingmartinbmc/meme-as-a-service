@@ -1,0 +1,43 @@
+# Source files (not needed in npm package)
+src/
+*.ts
+*.tsx
+
+# Development files
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+__tests__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+jest.config.js
+
+# Development scripts
+scripts/
+examples/
+demo-output/
+batch-output/
+
+# Generated files (but keep templates)
+*.png
+!templates/*.png
+
+# Documentation (keep README)
+*.md
+!README.md
+
+# Build artifacts
+dist/*.map
+*.map
+
+# OS files
+.DS_Store
+Thumbs.db
