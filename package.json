@@ -1,6 +1,6 @@
 {
   "name": "meme-as-a-service",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A node library + CLI that generates memes dynamically for Slack/Discord bots using templates",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
