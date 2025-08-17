@@ -1,6 +1,6 @@
 {
   "name": "meme-as-a-service",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A node library + CLI that generates memes dynamically for Slack/Discord bots using templates",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -69,7 +69,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/beingmartinbmc/meme-as-a-service.git"
+    "url": "git+https://github.com/beingmartinbmc/meme-as-a-service.git"
   },
   "bugs": {
     "url": "https://github.com/beingmartinbmc/meme-as-a-service/issues"
