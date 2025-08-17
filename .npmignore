@@ -1,62 +1,55 @@
-# Source files (not needed in npm package)
-src/
-*.ts
-*.tsx
+# Exclude generated meme images
+*.png
+!templates/*.png
 
-# Development files
+# Exclude example generated memes
+examples/*.png
+memes/
+uploads/
+
+# Exclude development files
+src/
+scripts/
+*.test.ts
+*.test.js
+jest.config.js
+tsconfig.json
+.eslintrc*
+
+# Exclude git files
 .git/
 .gitignore
-.github/
+
+# Exclude other development files
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# Test files
-__tests__/
-*.test.js
-*.test.ts
-*.spec.js
-*.spec.ts
-jest.config.js
-
-# Development scripts
-scripts/
-examples/
-demo-output/
-batch-output/
-
-# Generated test files (large PNG files)
-*.png
-!templates/*.png
-
-# Test files
-test-library.js
-simple-test.js
-npm-test.js
-demo.js
-
-# Documentation (keep only README)
-*.md
-!README.md
-
-# Build artifacts
-dist/*.map
-*.map
-dist/__tests__/
-
-# OS files
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Development directories
-uploads/
-node_modules/
+# Logs
+logs
+*.log
 
-# Large generated files
-api-real-meme.png
-distracted-meme.png
-doge-meme.png
-drake-real-meme.png
-library-test-*.png
-simple-test-*.png
+# Coverage
+coverage/
+*.lcov
+.nyc_output
+
+# Cache
+.cache
+.parcel-cache
+.eslintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/

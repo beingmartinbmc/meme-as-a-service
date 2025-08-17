@@ -9,7 +9,7 @@
   },
   "files": [
     "dist/",
-    "templates/*.png",
+    "templates/",
     "README.md",
     "LICENSE"
   ],
