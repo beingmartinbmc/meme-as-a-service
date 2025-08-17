@@ -11,6 +11,8 @@ npm install meme-as-a-service
 
 # Generate a meme instantly
 npx meme-as-a-service generate drake -t 'Hello World' -b 'It works!'
+npx meme-as-a-service generate doge -t 'Much coding' -b 'Very epic, wow!'
+npx meme-as-a-service generate distracted-boyfriend -t 'My code' -b 'Stack Overflow'
 ```
 
 That's it! Your meme will be saved as `meme.png` in the current directory.
@@ -19,14 +21,16 @@ That's it! Your meme will be saved as `meme.png` in the current directory.
 
 ### **Option 1: Command Line (Easiest)**
 ```bash
-# Basic meme
+# Basic memes with different templates
 npx meme-as-a-service generate drake -t 'Top text' -b 'Bottom text'
+npx meme-as-a-service generate doge -t 'Much wow' -b 'Very template'
+npx meme-as-a-service generate two-buttons -t 'Button 1' -b 'Button 2'
 
 # Custom styling
-npx meme-as-a-service generate drake -t 'Custom' -b 'Style' --font-size 60 --color "#FF0000"
+npx meme-as-a-service generate change-my-mind -t 'Custom' -b 'Style' --font-size 60 --color "#FF0000"
 
 # Save with custom name
-npx meme-as-a-service generate drake -t 'Hello' -b 'World' -o my-meme.png
+npx meme-as-a-service generate one-does-not-simply -t 'Hello' -b 'World' -o my-meme.png
 ```
 
 ### **Option 2: Library (For Applications)**
@@ -53,14 +57,14 @@ curl 'http://localhost:3000/meme/drake?top=Hello&bottom=World' --output meme.png
 
 ## 📋 Available Templates
 
-| Template | Description | Best For |
-|----------|-------------|----------|
-| `drake` | Drake Hotline Bling | Approval/disapproval |
-| `doge` | Much wow, very doge | Internet humor |
-| `distracted-boyfriend` | Distracted boyfriend | Cheating jokes |
-| `two-buttons` | Two buttons meme | Decision making |
-| `change-my-mind` | Steven Crowder | Opinions/debates |
-| `one-does-not-simply` | Boromir meme | Impossibility jokes |
+| Template | Description | Best For | Example |
+|----------|-------------|----------|---------|
+| `drake` | Drake Hotline Bling | Approval/disapproval | `npx meme-as-a-service generate drake -t 'Good code' -b 'Bad code'` |
+| `doge` | Much wow, very doge | Internet humor | `npx meme-as-a-service generate doge -t 'Much coding' -b 'Very epic, wow!'` |
+| `distracted-boyfriend` | Distracted boyfriend | Cheating jokes | `npx meme-as-a-service generate distracted-boyfriend -t 'My code' -b 'Stack Overflow'` |
+| `two-buttons` | Two buttons meme | Decision making | `npx meme-as-a-service generate two-buttons -t 'Button 1' -b 'Button 2'` |
+| `change-my-mind` | Steven Crowder | Opinions/debates | `npx meme-as-a-service generate change-my-mind -t 'Change my mind' -b 'About this topic'` |
+| `one-does-not-simply` | Boromir meme | Impossibility jokes | `npx meme-as-a-service generate one-does-not-simply -t 'One does not simply' -b 'Debug production'` |
 
 ## 🎨 Customization Options
 
@@ -88,8 +92,10 @@ npx meme-as-a-service list
 # Get template info
 npx meme-as-a-service info drake
 
-# Generate meme
+# Generate memes with different templates
 npx meme-as-a-service generate drake -t 'Writing tests' -b 'Skipping tests'
+npx meme-as-a-service generate doge -t 'Much testing' -b 'Very quality'
+npx meme-as-a-service generate distracted-boyfriend -t 'My code' -b 'Stack Overflow'
 ```
 
 ### Library Usage
@@ -102,7 +108,7 @@ console.log(templates); // ['drake', 'doge', 'distracted-boyfriend', ...]
 
 // Generate with custom styling
 const buffer = await generateMeme({
-  template: 'doge',
+  template: 'change-my-mind',
   topText: 'Much library',
   bottomText: 'Very test',
   fontSize: 50,
@@ -117,8 +123,10 @@ const buffer = await generateMeme({
 # Start server
 npx meme-as-a-service api
 
-# Generate meme
+# Generate memes with different templates
 curl 'http://localhost:3000/meme/drake?top=Hello&bottom=World'
+curl 'http://localhost:3000/meme/doge?top=Much&bottom=Wow'
+curl 'http://localhost:3000/meme/two-buttons?top=Button1&bottom=Button2'
 
 # Get templates
 curl "http://localhost:3000/templates"
@@ -140,6 +148,16 @@ cat > memes.json << EOF
     "template": "doge",
     "topText": "Meme 2",
     "bottomText": "Bottom text"
+  },
+  {
+    "template": "distracted-boyfriend",
+    "topText": "My code",
+    "bottomText": "Stack Overflow"
+  },
+  {
+    "template": "two-buttons",
+    "topText": "Button 1",
+    "bottomText": "Button 2"
   }
 ]
 EOF
