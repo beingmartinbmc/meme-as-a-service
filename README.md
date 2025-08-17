@@ -10,7 +10,7 @@ Generate memes instantly with Node.js! Create memes via command line, library, o
 npm install meme-as-a-service
 
 # Generate a meme instantly
-npx meme-as-a-service generate drake -t "Hello World" -b "It works!"
+npx meme-as-a-service generate drake -t 'Hello World' -b 'It works!'
 ```
 
 That's it! Your meme will be saved as `meme.png` in the current directory.
@@ -20,13 +20,13 @@ That's it! Your meme will be saved as `meme.png` in the current directory.
 ### **Option 1: Command Line (Easiest)**
 ```bash
 # Basic meme
-npx meme-as-a-service generate drake -t "Top text" -b "Bottom text"
+npx meme-as-a-service generate drake -t 'Top text' -b 'Bottom text'
 
 # Custom styling
-npx meme-as-a-service generate drake -t "Custom" -b "Style" --font-size 60 --color "#FF0000"
+npx meme-as-a-service generate drake -t 'Custom' -b 'Style' --font-size 60 --color "#FF0000"
 
 # Save with custom name
-npx meme-as-a-service generate drake -t "Hello" -b "World" -o my-meme.png
+npx meme-as-a-service generate drake -t 'Hello' -b 'World' -o my-meme.png
 ```
 
 ### **Option 2: Library (For Applications)**
@@ -48,7 +48,7 @@ require('fs').writeFileSync('meme.png', buffer);
 npx meme-as-a-service api
 
 # Generate via HTTP
-curl "http://localhost:3000/meme/drake?top=Hello&bottom=World" --output meme.png
+curl 'http://localhost:3000/meme/drake?top=Hello&bottom=World' --output meme.png
 ```
 
 ## 📋 Available Templates
@@ -89,7 +89,7 @@ npx meme-as-a-service list
 npx meme-as-a-service info drake
 
 # Generate meme
-npx meme-as-a-service generate drake -t "Writing tests" -b "Skipping tests"
+npx meme-as-a-service generate drake -t 'Writing tests' -b 'Skipping tests'
 ```
 
 ### Library Usage
@@ -118,7 +118,7 @@ const buffer = await generateMeme({
 npx meme-as-a-service api
 
 # Generate meme
-curl "http://localhost:3000/meme/drake?top=Hello&bottom=World"
+curl 'http://localhost:3000/meme/drake?top=Hello&bottom=World'
 
 # Get templates
 curl "http://localhost:3000/templates"
