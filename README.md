@@ -1,6 +1,40 @@
 # Meme-as-a-Service 🎭
 
+[![npm version](https://img.shields.io/npm/v/meme-as-a-service.svg)](https://www.npmjs.com/package/meme-as-a-service)
+[![npm downloads](https://img.shields.io/npm/dm/meme-as-a-service.svg)](https://www.npmjs.com/package/meme-as-a-service)
+[![npm license](https://img.shields.io/npm/l/meme-as-a-service.svg)](https://github.com/beingmartinbmc/meme-as-a-service/blob/main/LICENSE)
+[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/beingmartinbmc/meme-as-a-service/ci.yml?branch=main)](https://github.com/beingmartinbmc/meme-as-a-service/actions)
+[![Node.js Version](https://img.shields.io/node/v/meme-as-a-service.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.2.2-blue.svg)](https://www.typescriptlang.org/)
+
 Generate memes instantly with Node.js! Create memes via command line, library, or REST API.
+
+## ✨ Features
+
+- 🎭 **Multiple Templates** - Drake, Doge, Distracted Boyfriend, and more
+- 🖥️ **CLI Interface** - Generate memes from command line
+- 📚 **Library API** - Use as a Node.js library
+- 🌐 **REST API** - HTTP endpoints for web applications
+- 🎨 **Customization** - Font size, colors, stroke effects
+- 📦 **Batch Generation** - Create multiple memes at once
+- 🔧 **Custom Templates** - Add your own meme templates
+- ⚡ **TypeScript** - Full TypeScript support
+- 🧪 **Tested** - Comprehensive test coverage
+
+## 📋 Table of Contents
+
+- [Quick Start](#-quick-start)
+- [Choose Your Path](#-choose-your-path)
+- [Available Templates](#-available-templates)
+- [Customization Options](#-customization-options)
+- [Examples](#-examples)
+- [Advanced Features](#-advanced-features)
+- [Installation](#-installation)
+- [Development](#-development)
+- [API Reference](#-api-reference)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Roadmap](#-roadmap)
 
 ## 🚀 Quick Start
 
