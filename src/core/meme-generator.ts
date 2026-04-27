@@ -1,16 +1,50 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import sharp from 'sharp';
 import { MemeOptions, MemeTemplate, MemeResult, TextBox } from '../types';
-import { getTemplate } from '../templates';
-import { sanitizeText } from '../utils/text';
+import {
+  getTemplate,
+  setTemplatesDirectory,
+  invalidateCustomTemplatesCache,
+  listTemplates
+} from '../templates';
+import { sanitizeText, wrapText } from '../utils/text';
 import { getConfig } from '../config';
+
+const DEFAULT_FONT_STACK = 'Impact, \'Anton\', \'Oswald\', \'Helvetica Neue\', Helvetica, Arial, sans-serif';
+
+export type OutputFormat = 'png' | 'jpeg' | 'jpg' | 'webp' | 'avif';
+
+function normalizeFormat(fmt?: string): OutputFormat {
+  const f = (fmt || 'png').toLowerCase();
+  if (f === 'png' || f === 'jpeg' || f === 'jpg' || f === 'webp' || f === 'avif') {
+    return f as OutputFormat;
+  }
+  return 'png';
+}
+
+function encode(image: sharp.Sharp, format: OutputFormat, quality?: number): sharp.Sharp {
+  switch (format) {
+    case 'jpeg':
+    case 'jpg':
+      return image.jpeg({ quality: quality ?? 90, mozjpeg: true });
+    case 'webp':
+      return image.webp({ quality: quality ?? 90 });
+    case 'avif':
+      return image.avif({ quality: quality ?? 60 });
+    case 'png':
+    default:
+      return image.png({ compressionLevel: 9 });
+  }
+}
 
 export class MemeGenerator {
   private templatesPath: string;
 
   constructor(templatesPath?: string) {
     this.templatesPath = templatesPath || path.join(__dirname, '../../templates');
+    setTemplatesDirectory(this.templatesPath);
   }
 
   async generateMeme(options: MemeOptions): Promise<MemeResult> {
@@ -19,36 +53,34 @@ export class MemeGenerator {
       throw new Error(`Template '${options.template}' not found`);
     }
 
-    // Load template image
     const imagePath = path.join(this.templatesPath, template.imagePath);
-    if (!await fs.pathExists(imagePath)) {
+    if (!(await fs.pathExists(imagePath))) {
       throw new Error(`Template image not found: ${imagePath}`);
     }
 
-    // Load the base image
     const image = sharp(imagePath);
     const metadata = await image.metadata();
-    
+
     if (!metadata.width || !metadata.height) {
       throw new Error('Invalid image metadata');
     }
 
-    // Create SVG overlay for text
     const svgOverlay = this.createTextOverlay(template, options, metadata.width, metadata.height);
-    
-    // Composite the text overlay onto the image
-    const buffer = await image
-      .composite([{
+    const format = normalizeFormat(options.format);
+
+    const composed = image.composite([
+      {
         input: Buffer.from(svgOverlay),
         top: 0,
         left: 0
-      }])
-      .png()
-      .toBuffer();
+      }
+    ]);
+
+    const buffer = await encode(composed, format, options.quality).toBuffer();
 
     return {
       buffer,
-      format: 'png',
+      format: format === 'jpg' ? 'jpeg' : format,
       width: metadata.width,
       height: metadata.height,
       template: options.template,
@@ -58,83 +90,86 @@ export class MemeGenerator {
 
   async generateMemeAndSave(options: MemeOptions, filename?: string): Promise<{ result: MemeResult; filePath: string }> {
     const result = await this.generateMeme(options);
-    
+
     // Get configuration
     const config = await getConfig();
     await config.ensureOutputDirectory();
-    
-    // Generate filename if not provided
-    const outputFilename = filename || `${options.template}-${Date.now()}.png`;
+
+    const ext = result.format === 'jpeg' ? 'jpg' : result.format;
+    const outputFilename = filename || `${options.template}-${Date.now()}.${ext}`;
     const outputPath = path.join(config.getOutputDirectory(), outputFilename);
-    
+
     // Save the meme
     await fs.writeFile(outputPath, result.buffer);
-    
+
     return { result, filePath: outputPath };
   }
 
-  private createTextOverlay(template: MemeTemplate, options: MemeOptions, actualWidth: number, actualHeight: number): string {
+  private createTextOverlay(
+    template: MemeTemplate,
+    options: MemeOptions,
+    actualWidth: number,
+    actualHeight: number
+  ): string {
     const topText = sanitizeText(options.topText || '');
     const bottomText = sanitizeText(options.bottomText || '');
-    
-    const fontSize = options.fontSize || 40;
+
+    const fontFamily = options.fontFamily
+      ? `${options.fontFamily}, ${DEFAULT_FONT_STACK}`
+      : DEFAULT_FONT_STACK;
+    const baseFontSize = options.fontSize || 40;
     const textColor = options.textColor || '#FFFFFF';
     const strokeColor = options.strokeColor || '#000000';
-    const strokeWidth = options.strokeWidth || 2;
-    
-    let svgElements = '';
-    
-    // Calculate scaling factors if actual image dimensions differ from template
+    const strokeWidth = options.strokeWidth ?? 2;
+
     const scaleX = actualWidth / template.width;
     const scaleY = actualHeight / template.height;
-    
-    // Add top text
+    const scale = Math.min(scaleX, scaleY);
+
+    const renderBox = (box: TextBox, text: string, anchor: 'top' | 'bottom') => {
+      const cx = (box.x + box.width / 2) * scaleX;
+      const fontSize = (box.fontSize || baseFontSize) * scale;
+      const lineHeight = fontSize * 1.15;
+      const maxWidth = (box.maxWidth || box.width) * scaleX;
+      const lines = wrapText(text, maxWidth, fontSize);
+      const totalHeight = lines.length * lineHeight;
+
+      const startY =
+        anchor === 'top'
+          ? box.y * scaleY + fontSize
+          : (box.y + box.height) * scaleY - totalHeight + fontSize;
+
+      return lines
+        .map((line, idx) => {
+          const y = startY + idx * lineHeight;
+          return (
+            `<text x="${cx.toFixed(2)}" y="${y.toFixed(2)}" ` +
+            `font-family="${fontFamily}" ` +
+            `font-size="${fontSize.toFixed(2)}" ` +
+            `font-weight="bold" ` +
+            `text-anchor="middle" ` +
+            `fill="${textColor}" ` +
+            `stroke="${strokeColor}" ` +
+            `stroke-width="${strokeWidth}" ` +
+            `paint-order="stroke fill" ` +
+            `stroke-linejoin="round">` +
+            `${this.escapeSvgText(line)}</text>`
+          );
+        })
+        .join('');
+    };
+
+    let svgElements = '';
     if (topText && template.textBoxes.top) {
-      const textBox = template.textBoxes.top;
-      const x = (textBox.x + textBox.width / 2) * scaleX;
-      const y = (textBox.y + fontSize) * scaleY;
-      const scaledFontSize = fontSize * Math.min(scaleX, scaleY);
-      
-      svgElements += `
-        <text x="${x}" y="${y}" 
-              font-family="Impact, Arial, sans-serif" 
-              font-size="${scaledFontSize}" 
-              text-anchor="middle" 
-              fill="${textColor}"
-              stroke="${strokeColor}" 
-              stroke-width="${strokeWidth}">
-          ${this.escapeSvgText(topText)}
-        </text>
-      `;
+      svgElements += renderBox(template.textBoxes.top, topText, 'top');
     }
-    
-    // Add bottom text
     if (bottomText && template.textBoxes.bottom) {
-      const textBox = template.textBoxes.bottom;
-      const x = (textBox.x + textBox.width / 2) * scaleX;
-      const y = (textBox.y + textBox.height - fontSize / 2) * scaleY;
-      const scaledFontSize = fontSize * Math.min(scaleX, scaleY);
-      
-      svgElements += `
-        <text x="${x}" y="${y}" 
-              font-family="Impact, Arial, sans-serif" 
-              font-size="${scaledFontSize}" 
-              text-anchor="middle" 
-              fill="${textColor}"
-              stroke="${strokeColor}" 
-              stroke-width="${strokeWidth}">
-          ${this.escapeSvgText(bottomText)}
-        </text>
-      `;
+      svgElements += renderBox(template.textBoxes.bottom, bottomText, 'bottom');
     }
-    
-    return `
-      <svg width="${actualWidth}" height="${actualHeight}" xmlns="http://www.w3.org/2000/svg">
-        ${svgElements}
-      </svg>
-    `;
+
+    return `<svg width="${actualWidth}" height="${actualHeight}" xmlns="http://www.w3.org/2000/svg">${svgElements}</svg>`;
   }
-  
+
   private escapeSvgText(text: string): string {
     return text
       .replace(/&/g, '&amp;')
@@ -207,9 +242,11 @@ export class MemeGenerator {
           };
 
           const result = await this.generateMeme(memeOptions);
-          const filename = `${template}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.png`;
+          const ext = result.format === 'jpeg' ? 'jpg' : result.format;
+          const rand = crypto.randomBytes(4).toString('hex');
+          const filename = `${template}-${Date.now()}-${rand}.${ext}`;
           const filePath = path.join(outputDir, filename);
-          
+
           await fs.writeFile(filePath, result.buffer);
           results.push({ result, filePath });
         } catch (error) {
@@ -238,7 +275,7 @@ export class MemeGenerator {
     // Copy image to templates directory
     const templateDir = path.join(this.templatesPath, 'custom');
     await fs.ensureDir(templateDir);
-    
+
     const fileName = `${name}.png`;
     const destPath = path.join(templateDir, fileName);
     await fs.copy(imagePath, destPath);
@@ -246,11 +283,11 @@ export class MemeGenerator {
     // Load image to get dimensions
     const image = sharp(destPath);
     const imageMetadata = await image.metadata();
-    
+
     if (!imageMetadata.width || !imageMetadata.height) {
       throw new Error('Invalid image metadata');
     }
-    
+
     // Create template definition
     const template: MemeTemplate = {
       name,
@@ -265,18 +302,17 @@ export class MemeGenerator {
     // Save template definition
     const templatesFile = path.join(this.templatesPath, 'custom-templates.json');
     let customTemplates: Record<string, MemeTemplate> = {};
-    
+
     if (await fs.pathExists(templatesFile)) {
       customTemplates = await fs.readJson(templatesFile);
     }
-    
+
     customTemplates[name] = template;
     await fs.writeJson(templatesFile, customTemplates, { spaces: 2 });
+    invalidateCustomTemplatesCache();
   }
 
   getAvailableTemplates(): string[] {
-    // This would need to be implemented to read from the templates directory
-    // For now, return the built-in templates
-    return ['drake', 'distracted-boyfriend', 'doge', 'two-buttons', 'change-my-mind', 'one-does-not-simply'];
+    return listTemplates();
   }
 }

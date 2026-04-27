@@ -1,6 +1,8 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { MemeTemplate } from '../types';
 
-export const MEME_TEMPLATES: Record<string, MemeTemplate> = {
+export const BUILTIN_MEME_TEMPLATES: Record<string, MemeTemplate> = {
   drake: {
     name: 'Drake Hotline Bling',
     imagePath: 'drake.png',
@@ -195,22 +197,84 @@ export const MEME_TEMPLATES: Record<string, MemeTemplate> = {
   }
 };
 
+/**
+ * Backwards-compatible alias. `MEME_TEMPLATES` historically only contained
+ * built-ins; consumers should now use {@link getAllTemplates} which also
+ * includes custom templates.
+ */
+export const MEME_TEMPLATES = BUILTIN_MEME_TEMPLATES;
+
+const DEFAULT_TEMPLATES_DIR = path.join(__dirname, '..', '..', 'templates');
+
+let customTemplatesDir = DEFAULT_TEMPLATES_DIR;
+let customTemplatesCache: Record<string, MemeTemplate> | null = null;
+let customTemplatesMtime = 0;
+
+/**
+ * Override the directory used to look up custom templates
+ * (`<dir>/custom-templates.json`). Useful for tests and embedders.
+ */
+export function setTemplatesDirectory(dir: string): void {
+  customTemplatesDir = dir;
+  customTemplatesCache = null;
+  customTemplatesMtime = 0;
+}
+
+export function getTemplatesDirectory(): string {
+  return customTemplatesDir;
+}
+
+/**
+ * Force the next template lookup to re-read `custom-templates.json` from disk.
+ */
+export function invalidateCustomTemplatesCache(): void {
+  customTemplatesCache = null;
+  customTemplatesMtime = 0;
+}
+
+function loadCustomTemplates(): Record<string, MemeTemplate> {
+  const file = path.join(customTemplatesDir, 'custom-templates.json');
+  try {
+    const stat = fs.statSync(file);
+    if (customTemplatesCache && stat.mtimeMs === customTemplatesMtime) {
+      return customTemplatesCache;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    customTemplatesCache = JSON.parse(raw) as Record<string, MemeTemplate>;
+    customTemplatesMtime = stat.mtimeMs;
+    return customTemplatesCache;
+  } catch {
+    customTemplatesCache = {};
+    customTemplatesMtime = 0;
+    return customTemplatesCache;
+  }
+}
+
+/**
+ * Returns built-in templates merged with any custom templates registered via
+ * `DynamicTemplateLoader` / the API. Custom templates win on key collision.
+ */
+export function getAllTemplates(): Record<string, MemeTemplate> {
+  return { ...BUILTIN_MEME_TEMPLATES, ...loadCustomTemplates() };
+}
+
 export function getTemplate(name: string): MemeTemplate | null {
-  return MEME_TEMPLATES[name.toLowerCase()] || null;
+  const all = getAllTemplates();
+  return all[name.toLowerCase()] || all[name] || null;
 }
 
 export function listTemplates(): string[] {
-  return Object.keys(MEME_TEMPLATES);
+  return Object.keys(getAllTemplates());
 }
 
 export function searchTemplates(query: string): string[] {
   const searchTerm = query.toLowerCase();
-  return Object.entries(MEME_TEMPLATES)
-    .filter(([key, template]) => 
-      key.includes(searchTerm) ||
+  return Object.entries(getAllTemplates())
+    .filter(([key, template]) =>
+      key.toLowerCase().includes(searchTerm) ||
       template.name.toLowerCase().includes(searchTerm) ||
       template.description?.toLowerCase().includes(searchTerm) ||
-      template.tags?.some(tag => tag.toLowerCase().includes(searchTerm))
+      template.tags?.some((tag) => tag.toLowerCase().includes(searchTerm))
     )
     .map(([key]) => key);
 }

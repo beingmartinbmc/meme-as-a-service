@@ -95,13 +95,14 @@ export function drawText(
   return svgText;
 }
 
+/**
+ * Strip control characters but preserve Unicode (letters, marks, punctuation,
+ * symbols, emoji) so memes can include any human language and emoji.
+ */
 export function sanitizeText(text: string): string {
   if (!text) return '';
-  
-  // Remove or replace problematic characters
-  return text
-    .replace(/[^\w\s\-_.,!?()]/g, '') // Remove special characters except common ones
-    .trim();
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\u0000-\u001F\u007F]/g, '').trim();
 }
 
 export function truncateText(text: string, maxLength: number = 100): string {
