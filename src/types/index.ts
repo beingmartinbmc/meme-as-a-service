@@ -1,3 +1,5 @@
+export type MemeOutputFormat = 'png' | 'jpeg' | 'jpg' | 'webp' | 'avif';
+
 export interface MemeOptions {
   template: string;
   topText?: string;
@@ -8,6 +10,9 @@ export interface MemeOptions {
   strokeColor?: string;
   strokeWidth?: number;
   maxWidth?: number;
+  /** Output format. Defaults to `png`. */
+  format?: MemeOutputFormat;
+  /** Codec quality 1-100. Honored by jpeg/webp/avif. */
   quality?: number;
 }
 

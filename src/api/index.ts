@@ -1,20 +1,47 @@
+import type { Server } from 'http';
 import app from './server';
 
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const HOST = process.env.HOST || '0.0.0.0';
+
+export function startServer(port: number = PORT, host: string = HOST): Server {
+  const server = app.listen(port, host, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Meme-as-a-Service API listening on http://${host}:${port}`);
+    // eslint-disable-next-line no-console
+    console.log(`Docs:    http://${host}:${port}/docs`);
+    // eslint-disable-next-line no-console
+    console.log(`OpenAPI: http://${host}:${port}/openapi.json`);
+  });
+
+  const shutdown = (signal: string) => {
+    // eslint-disable-next-line no-console
+    console.log(`\nReceived ${signal}, shutting down gracefully...`);
+    const force = setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.error('Forcing shutdown after 10s');
+      process.exit(1);
+    }, 10_000);
+    force.unref();
+
+    server.close((err) => {
+      if (err) {
+        // eslint-disable-next-line no-console
+        console.error('Error during shutdown:', err);
+        process.exit(1);
+      }
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  return server;
+}
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`🎭 Meme-as-a-Service API running on port ${PORT}`);
-    console.log(`📖 API Documentation:`);
-    console.log(`   GET  /health - Health check`);
-    console.log(`   GET  /templates - List all templates`);
-    console.log(`   GET  /templates/:template - Get template info`);
-    console.log(`   GET  /meme/:template - Generate meme (query params)`);
-    console.log(`   POST /meme/:template - Generate meme (JSON body)`);
-    console.log(`   POST /meme/batch - Generate multiple memes`);
-    console.log(`   POST /templates - Add custom template`);
-    console.log(`\n🌐 Server: http://localhost:${PORT}`);
-  });
+  startServer();
 }
 
 export default app;

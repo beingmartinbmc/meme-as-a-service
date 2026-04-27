@@ -1,7 +1,9 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
+import sharp from 'sharp';
 import { MemeTemplate } from '../types';
+import { invalidateCustomTemplatesCache } from './index';
 
 export interface TemplateSource {
   name: string;
@@ -31,7 +33,7 @@ export class DynamicTemplateLoader {
 
   async addTemplateFromUrl(source: TemplateSource): Promise<boolean> {
     try {
-      console.log(`📥 Downloading template: ${source.name}`);
+      console.log(`Downloading template: ${source.name}`);
       
       // Download the template image
       const response = await axios({
@@ -41,29 +43,45 @@ export class DynamicTemplateLoader {
         timeout: 10000
       });
 
+      await fs.ensureDir(this.templatesPath);
       const imagePath = path.join(this.templatesPath, `${source.name}.png`);
       await fs.writeFile(imagePath, response.data);
 
-      // Create a basic template definition
+      const meta = await sharp(imagePath).metadata();
+      const width = meta.width || 800;
+      const height = meta.height || 600;
+
       const template: MemeTemplate = {
         name: source.name,
         imagePath: `${source.name}.png`,
-        width: 800, // Default size, will be updated
-        height: 600,
+        width,
+        height,
         description: source.description || `${source.name} meme template`,
         tags: [source.name, 'custom'],
         textBoxes: {
           top: {
-            x: 400,
-            y: 50,
-            width: 350,
-            height: 200,
-            fontSize: 35,
+            x: Math.round(width * 0.05),
+            y: Math.round(height * 0.05),
+            width: Math.round(width * 0.9),
+            height: Math.round(height * 0.2),
+            fontSize: Math.max(24, Math.round(height * 0.07)),
             fontFamily: 'Impact',
             textColor: '#FFFFFF',
             strokeColor: '#000000',
             strokeWidth: 2,
-            maxWidth: 330
+            maxWidth: Math.round(width * 0.85)
+          },
+          bottom: {
+            x: Math.round(width * 0.05),
+            y: Math.round(height * 0.75),
+            width: Math.round(width * 0.9),
+            height: Math.round(height * 0.2),
+            fontSize: Math.max(24, Math.round(height * 0.07)),
+            fontFamily: 'Impact',
+            textColor: '#FFFFFF',
+            strokeColor: '#000000',
+            strokeWidth: 2,
+            maxWidth: Math.round(width * 0.85)
           }
         }
       };
@@ -72,10 +90,10 @@ export class DynamicTemplateLoader {
       const customTemplates = await this.loadCustomTemplates();
       customTemplates[source.name] = template;
 
-      // Save updated templates
       await fs.writeJson(this.customTemplatesFile, customTemplates, { spaces: 2 });
+      invalidateCustomTemplatesCache();
 
-      console.log(`✅ Added template: ${source.name}`);
+      console.log(`Added template: ${source.name}`);
       return true;
     } catch (error) {
       console.error(`❌ Failed to add template ${source.name}:`, error);
@@ -90,29 +108,30 @@ export class DynamicTemplateLoader {
     metadata?: { description?: string; tags?: string[] }
   ): Promise<boolean> {
     try {
-      // Copy image to templates directory
+      await fs.ensureDir(this.templatesPath);
       const destPath = path.join(this.templatesPath, `${name}.png`);
       await fs.copy(imagePath, destPath);
 
-      // Create template definition
+      const meta = await sharp(destPath).metadata();
+      const width = meta.width || 800;
+      const height = meta.height || 600;
+
       const template: MemeTemplate = {
         name,
         imagePath: `${name}.png`,
-        width: 800, // Will be updated with actual dimensions
-        height: 600,
+        width,
+        height,
         textBoxes,
         description: metadata?.description,
         tags: metadata?.tags || [name, 'custom']
       };
 
-      // Load existing custom templates
       const customTemplates = await this.loadCustomTemplates();
       customTemplates[name] = template;
-
-      // Save updated templates
       await fs.writeJson(this.customTemplatesFile, customTemplates, { spaces: 2 });
+      invalidateCustomTemplatesCache();
 
-      console.log(`✅ Added template: ${name}`);
+      console.log(`Added template: ${name}`);
       return true;
     } catch (error) {
       console.error(`❌ Failed to add template ${name}:`, error);
@@ -136,11 +155,11 @@ export class DynamicTemplateLoader {
         await fs.remove(imagePath);
       }
 
-      // Remove from templates
       delete customTemplates[name];
       await fs.writeJson(this.customTemplatesFile, customTemplates, { spaces: 2 });
+      invalidateCustomTemplatesCache();
 
-      console.log(`✅ Removed template: ${name}`);
+      console.log(`Removed template: ${name}`);
       return true;
     } catch (error) {
       console.error(`❌ Failed to remove template ${name}:`, error);

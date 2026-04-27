@@ -3,9 +3,9 @@
 [![npm version](https://img.shields.io/npm/v/meme-as-a-service.svg)](https://www.npmjs.com/package/meme-as-a-service)
 [![npm downloads](https://img.shields.io/npm/dm/meme-as-a-service.svg)](https://www.npmjs.com/package/meme-as-a-service)
 [![npm license](https://img.shields.io/npm/l/meme-as-a-service.svg)](https://github.com/beingmartinbmc/meme-as-a-service/blob/main/LICENSE)
-[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/beingmartinbmc/meme-as-a-service/ci.yml?branch=main)](https://github.com/beingmartinbmc/meme-as-a-service/actions)
+[![CI](https://github.com/beingmartinbmc/meme-as-a-service/actions/workflows/ci.yml/badge.svg)](https://github.com/beingmartinbmc/meme-as-a-service/actions/workflows/ci.yml)
 [![Node.js Version](https://img.shields.io/node/v/meme-as-a-service.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.2.2-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)](https://www.typescriptlang.org/)
 
 Generate memes instantly with Node.js! Create memes via command line, library, or REST API.
 
@@ -15,11 +15,15 @@ Generate memes instantly with Node.js! Create memes via command line, library, o
 - 🖥️ **CLI Interface** - Generate memes from command line
 - 📚 **Library API** - Use as a Node.js library
 - 🌐 **REST API** - HTTP endpoints for web applications
-- 🎨 **Customization** - Font size, colors, stroke effects
-- 📦 **Batch Generation** - Create multiple memes at once
-- 🔧 **Custom Templates** - Add your own meme templates
+- 🎨 **Customization** - Font size, family, colors, stroke effects, multi-line wrap
+- 🖼️ **PNG / JPEG / WebP / AVIF** output via `format` + `quality`
+- 📦 **Batch Generation** - JSON or streamed ZIP output
+- 🔧 **Custom Templates** - Upload via API or CLI; usable immediately
+- 📜 **OpenAPI 3 + Swagger UI** at `/docs`
+- 🛡️ **Hardened API** - helmet, CORS, compression, rate-limiting, input validation (zod)
+- 🐳 **Dockerfile** with healthcheck and graceful shutdown
 - ⚡ **TypeScript** - Full TypeScript support
-- 🧪 **Tested** - Comprehensive test coverage
+- 🧪 **Tested** - Jest + supertest, Node 18/20/22 in CI
 
 ## 📋 Table of Contents
 
@@ -103,17 +107,18 @@ curl 'http://localhost:3000/meme/drake?top=Hello&bottom=World' --output meme.png
 ## 🎨 Customization Options
 
 ```bash
-# Font size
+# Font size / family
 --font-size 60
+--font-family "Anton"
 
-# Text color
+# Text color, stroke color, stroke width
 --color "#FF6B6B"
-
-# Stroke (outline) color
 --stroke "#2C3E50"
-
-# Stroke width
 --stroke-width 3
+
+# Output format / quality
+--format webp
+--quality 90
 ```
 
 ## 📚 Examples
@@ -270,11 +275,22 @@ src/
 - `template add/remove/list-custom` - Manage templates
 
 ### API Endpoints
-- `GET /meme/:template` - Generate meme
-- `POST /meme/:template` - Generate with options
-- `GET /templates` - List templates
-- `GET /templates/:template` - Get template info
-- `POST /meme/batch` - Batch generation
+- `GET  /health` - Health check
+- `GET  /docs` - Swagger UI
+- `GET  /openapi.json` - OpenAPI 3 spec
+- `GET  /templates` - List templates
+- `GET  /templates/:template` - Get template info
+- `GET  /meme/:template` - Generate meme (query params)
+- `POST /meme/:template` - Generate meme (JSON body)
+- `POST /meme/batch` - Batch generation (`outputFormat: "json" | "zip"`)
+- `POST /templates/upload` - Add custom template (multipart)
+
+### Docker
+
+```bash
+docker build -t meme-as-a-service .
+docker run --rm -p 3000:3000 meme-as-a-service
+```
 
 ## 🤝 Contributing
 
@@ -290,6 +306,11 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🚀 Roadmap
 
+- [x] WebP / JPEG / AVIF output
+- [x] Streamed ZIP batch output
+- [x] OpenAPI 3 spec + Swagger UI
+- [x] Hardened API (helmet, rate-limit, validation)
+- [x] Dockerfile + CI/CD
 - [ ] Template marketplace
 - [ ] AI-powered caption generation
 - [ ] GIF and video meme support

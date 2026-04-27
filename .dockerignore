@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+.vscode
+node_modules
+dist
+coverage
+memes
+uploads
+examples
+*.log
+*.png
+!templates/*.png
+.DS_Store
+.env*
+Dockerfile
+.dockerignore
