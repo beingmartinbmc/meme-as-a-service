@@ -2,13 +2,36 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import axios from 'axios';
 import sharp from 'sharp';
-import { MemeTemplate } from '../types';
+import { MemeTemplate, TextBox } from '../types';
 import { invalidateCustomTemplatesCache } from './index';
+import { invalidateRenderCache } from '../core/render-cache';
 
 export interface TemplateSource {
   name: string;
   url: string;
   description?: string;
+}
+
+const VALID_NAME = /^[a-zA-Z0-9_-]+$/;
+
+function assertSafeTemplateName(name: string): void {
+  if (!VALID_NAME.test(name)) {
+    throw new Error(
+      `Invalid template name '${name}'. Allowed: [a-zA-Z0-9_-].`
+    );
+  }
+}
+
+function resolveSafe(baseDir: string, relative: string): string {
+  const resolved = path.resolve(baseDir, relative);
+  const normalizedBase = path.resolve(baseDir);
+  if (
+    resolved !== normalizedBase &&
+    !resolved.startsWith(normalizedBase + path.sep)
+  ) {
+    throw new Error('Template path escapes templates directory');
+  }
+  return resolved;
 }
 
 export class DynamicTemplateLoader {
@@ -33,8 +56,9 @@ export class DynamicTemplateLoader {
 
   async addTemplateFromUrl(source: TemplateSource): Promise<boolean> {
     try {
+      assertSafeTemplateName(source.name);
       console.log(`Downloading template: ${source.name}`);
-      
+
       // Download the template image
       const response = await axios({
         method: 'GET',
@@ -44,7 +68,7 @@ export class DynamicTemplateLoader {
       });
 
       await fs.ensureDir(this.templatesPath);
-      const imagePath = path.join(this.templatesPath, `${source.name}.png`);
+      const imagePath = resolveSafe(this.templatesPath, `${source.name}.png`);
       await fs.writeFile(imagePath, response.data);
 
       const meta = await sharp(imagePath).metadata();
@@ -92,6 +116,7 @@ export class DynamicTemplateLoader {
 
       await fs.writeJson(this.customTemplatesFile, customTemplates, { spaces: 2 });
       invalidateCustomTemplatesCache();
+      invalidateRenderCache();
 
       console.log(`Added template: ${source.name}`);
       return true;
@@ -104,12 +129,13 @@ export class DynamicTemplateLoader {
   async addTemplateFromFile(
     name: string,
     imagePath: string,
-    textBoxes: { top?: any; bottom?: any },
+    textBoxes: { top?: Partial<TextBox>; bottom?: Partial<TextBox> },
     metadata?: { description?: string; tags?: string[] }
   ): Promise<boolean> {
     try {
+      assertSafeTemplateName(name);
       await fs.ensureDir(this.templatesPath);
-      const destPath = path.join(this.templatesPath, `${name}.png`);
+      const destPath = resolveSafe(this.templatesPath, `${name}.png`);
       await fs.copy(imagePath, destPath);
 
       const meta = await sharp(destPath).metadata();
@@ -121,7 +147,7 @@ export class DynamicTemplateLoader {
         imagePath: `${name}.png`,
         width,
         height,
-        textBoxes,
+        textBoxes: textBoxes as { top?: TextBox; bottom?: TextBox },
         description: metadata?.description,
         tags: metadata?.tags || [name, 'custom']
       };
@@ -130,6 +156,7 @@ export class DynamicTemplateLoader {
       customTemplates[name] = template;
       await fs.writeJson(this.customTemplatesFile, customTemplates, { spaces: 2 });
       invalidateCustomTemplatesCache();
+      invalidateRenderCache();
 
       console.log(`Added template: ${name}`);
       return true;
@@ -141,16 +168,17 @@ export class DynamicTemplateLoader {
 
   async removeTemplate(name: string): Promise<boolean> {
     try {
+      assertSafeTemplateName(name);
       // Load existing custom templates
       const customTemplates = await this.loadCustomTemplates();
-      
+
       if (!customTemplates[name]) {
         console.warn(`Template ${name} not found`);
         return false;
       }
 
       // Remove image file
-      const imagePath = path.join(this.templatesPath, `${name}.png`);
+      const imagePath = resolveSafe(this.templatesPath, `${name}.png`);
       if (await fs.pathExists(imagePath)) {
         await fs.remove(imagePath);
       }
@@ -158,6 +186,7 @@ export class DynamicTemplateLoader {
       delete customTemplates[name];
       await fs.writeJson(this.customTemplatesFile, customTemplates, { spaces: 2 });
       invalidateCustomTemplatesCache();
+      invalidateRenderCache();
 
       console.log(`Removed template: ${name}`);
       return true;

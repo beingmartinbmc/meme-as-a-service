@@ -1,41 +1,29 @@
 import type { Server } from 'http';
+import closeWithGrace from 'close-with-grace';
 import app from './server';
+import { logger } from '../observability/logger';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
+const SHUTDOWN_DELAY_MS = parseInt(process.env.SHUTDOWN_DELAY_MS || '10000', 10);
 
 export function startServer(port: number = PORT, host: string = HOST): Server {
   const server = app.listen(port, host, () => {
-    // eslint-disable-next-line no-console
-    console.log(`Meme-as-a-Service API listening on http://${host}:${port}`);
-    // eslint-disable-next-line no-console
-    console.log(`Docs:    http://${host}:${port}/docs`);
-    // eslint-disable-next-line no-console
-    console.log(`OpenAPI: http://${host}:${port}/openapi.json`);
+    logger.info(`Meme-as-a-Service API listening on http://${host}:${port}`);
+    logger.info(`Docs:    http://${host}:${port}/docs`);
+    logger.info(`OpenAPI: http://${host}:${port}/openapi.json`);
   });
 
-  const shutdown = (signal: string) => {
-    // eslint-disable-next-line no-console
-    console.log(`\nReceived ${signal}, shutting down gracefully...`);
-    const force = setTimeout(() => {
-      // eslint-disable-next-line no-console
-      console.error('Forcing shutdown after 10s');
-      process.exit(1);
-    }, 10_000);
-    force.unref();
-
-    server.close((err) => {
-      if (err) {
-        // eslint-disable-next-line no-console
-        console.error('Error during shutdown:', err);
-        process.exit(1);
-      }
-      process.exit(0);
-    });
-  };
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  closeWithGrace({ delay: SHUTDOWN_DELAY_MS }, async ({ signal, err }) => {
+    if (err) {
+      logger.error({ err }, 'Shutting down due to error');
+    } else if (signal) {
+      logger.info(`Received ${signal}, draining in-flight requests...`);
+    }
+    await new Promise<void>((resolve, reject) =>
+      server.close((closeErr) => (closeErr ? reject(closeErr) : resolve()))
+    );
+  });
 
   return server;
 }

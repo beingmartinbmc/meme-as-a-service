@@ -1,8 +1,7 @@
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import morgan from 'morgan';
+import pinoHttp from 'pino-http';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import JSZip from 'jszip';
@@ -10,7 +9,14 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs-extra';
 import { ZodError } from 'zod';
-import { generateMeme, getAvailableTemplates, searchAvailableTemplates, getTemplateInfo, addCustomTemplate } from '../index';
+import swaggerUiDistPath from 'swagger-ui-dist/absolute-path';
+import {
+  generateMeme,
+  getAvailableTemplates,
+  searchAvailableTemplates,
+  getTemplateInfo,
+  addCustomTemplate
+} from '../index';
 import { MemeOptions } from '../types';
 import {
   memeOptionsSchema,
@@ -20,6 +26,11 @@ import {
   textBoxSchema
 } from './schemas';
 import { openapiDocument, swaggerHtml } from './openapi';
+import { corsMiddleware } from './middleware/cors';
+import { apiKeyAuth } from './middleware/api-key';
+import { requestId } from './middleware/request-id';
+import { logger } from '../observability/logger';
+import { metricsText, httpRequestsTotal } from '../observability/metrics';
 
 import pkg from '../../package.json';
 
@@ -32,6 +43,8 @@ const MIME_BY_FORMAT: Record<string, string> = {
 };
 
 const app = express();
+
+const isTest = process.env.NODE_ENV === 'test';
 
 // Multer with size + type guards. Files land in the OS temp dir, not cwd.
 const upload = multer({
@@ -48,22 +61,42 @@ const upload = multer({
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
+app.use(requestId);
+
+if (!isTest) {
+  app.use(
+    pinoHttp({
+      logger,
+      customLogLevel: (_req, res, err) => {
+        if (err || res.statusCode >= 500) return 'error';
+        if (res.statusCode >= 400) return 'warn';
+        return 'info';
+      },
+      genReqId: (req) => (req as unknown as { id: string }).id
+    })
+  );
+}
+
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors());
+app.use(corsMiddleware());
 app.use(compression());
 app.use(express.json({ limit: '512kb' }));
 app.use(express.urlencoded({ extended: true, limit: '512kb' }));
 
-// Skip access logs in tests; structured-ish single-line logs in dev/prod.
-if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-}
+// Track HTTP request count metrics per route/status.
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    const route = (req.route && req.route.path) || req.path;
+    httpRequestsTotal.inc({
+      method: req.method,
+      route,
+      status: String(res.statusCode)
+    });
+  });
+  next();
+});
 
-// Default limiter: 60 req/min per IP. Heavier limits on generation routes.
-// Disabled in test mode to keep the suite fast and deterministic.
 const noopLimiter: express.RequestHandler = (_req, _res, next) => next();
-const isTest = process.env.NODE_ENV === 'test';
-
 const defaultLimiter = isTest
   ? noopLimiter
   : rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
@@ -90,13 +123,40 @@ function sendValidationError(res: express.Response, err: unknown): void {
 // Root → docs redirect
 app.get('/', (_req, res) => res.redirect('/docs'));
 
-// OpenAPI + Swagger UI
+// OpenAPI + Swagger UI. Assets served locally from swagger-ui-dist.
 app.get('/openapi.json', (_req, res) => res.json(openapiDocument));
+app.use('/docs/static', express.static(swaggerUiDistPath()));
 app.get('/docs', (_req, res) => res.type('html').send(swaggerHtml));
 
-// Health check endpoint
-app.get('/health', (_req, res) => {
+// Liveness probe — just proves the process is running.
+app.get(['/healthz', '/health'], (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), version: pkg.version });
+});
+
+// Readiness probe — verifies template registry has at least one entry.
+app.get('/readyz', (_req, res) => {
+  try {
+    const templates = getAvailableTemplates();
+    if (templates.length === 0) {
+      return res.status(503).json({ ready: false, templates: 0 });
+    }
+    return res.json({ ready: true, templates: templates.length });
+  } catch (error) {
+    return res.status(503).json({
+      ready: false,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Prometheus metrics.
+app.get('/metrics', async (_req, res, next) => {
+  try {
+    res.setHeader('Content-Type', 'text/plain; version=0.0.4');
+    res.send(await metricsText());
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Get available templates
@@ -141,9 +201,9 @@ app.get('/templates/:template', (req, res) => {
       });
     }
 
-    res.json(info);
+    return res.json(info);
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to get template info',
       message: error instanceof Error ? error.message : String(error)
     });
@@ -152,7 +212,7 @@ app.get('/templates/:template', (req, res) => {
 
 // IMPORTANT: register batch route BEFORE :template, otherwise "batch" is parsed
 // as a template name.
-app.post('/meme/batch', batchLimiter, async (req, res) => {
+app.post('/meme/batch', batchLimiter, apiKeyAuth, async (req, res) => {
   let parsed;
   try {
     parsed = batchRequestSchema.parse(req.body);
@@ -210,7 +270,7 @@ app.post('/meme/batch', batchLimiter, async (req, res) => {
 });
 
 // Generate meme via query params
-app.get('/meme/:template', generateLimiter, async (req, res) => {
+app.get('/meme/:template', generateLimiter, apiKeyAuth, async (req, res) => {
   let templateName: string;
   try {
     templateName = templateNameSchema.parse(req.params.template);
@@ -252,7 +312,7 @@ app.get('/meme/:template', generateLimiter, async (req, res) => {
 });
 
 // Generate meme via JSON body
-app.post('/meme/:template', generateLimiter, async (req, res) => {
+app.post('/meme/:template', generateLimiter, apiKeyAuth, async (req, res) => {
   let templateName: string;
   try {
     templateName = templateNameSchema.parse(req.params.template);
@@ -283,7 +343,7 @@ app.post('/meme/:template', generateLimiter, async (req, res) => {
 });
 
 // Add custom template (multipart upload)
-app.post('/templates/upload', upload.single('image'), async (req, res) => {
+app.post('/templates/upload', apiKeyAuth, upload.single('image'), async (req, res) => {
   let validated;
   try {
     validated = customTemplateSchema.parse(req.body || {});
@@ -304,7 +364,12 @@ app.post('/templates/upload', upload.single('image'), async (req, res) => {
 
     const metadata = {
       description: validated.description,
-      tags: validated.tags ? validated.tags.split(',').map((t) => t.trim()).filter(Boolean) : undefined
+      tags: validated.tags
+        ? validated.tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : undefined
     };
 
     await addCustomTemplate(validated.name, imageFile.path, textBoxes, metadata);
@@ -319,18 +384,19 @@ app.post('/templates/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// Backwards compatibility: old POST /templates path
-app.post('/templates', upload.single('image'), (req, _res, _next) => {
-  req.url = '/templates/upload';
-  _next();
+// Backwards compatibility: old POST /templates path. Respond with 308
+// Permanent Redirect so clients can follow to the canonical path — the previous
+// `req.url` mutation trick was a no-op after routing was resolved.
+app.post('/templates', (req, res) => {
+  res.redirect(308, '/templates/upload');
 });
 
 // Serve static files (for demo purposes)
 app.use('/static', express.static(path.join(__dirname, '../../public')));
 
 // Error handling middleware
-app.use((error: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('API Error:', error);
+app.use((error: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err: error, reqId: (req as unknown as { id?: string }).id }, 'API error');
   res.status(500).json({
     error: 'Internal server error',
     message: error.message || 'Something went wrong'

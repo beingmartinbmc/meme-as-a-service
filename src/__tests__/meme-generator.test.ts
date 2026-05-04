@@ -1,116 +1,230 @@
+import * as fs from 'fs-extra';
+import * as os from 'os';
+import * as path from 'path';
 import { MemeGenerator } from '../core/meme-generator';
 import { MemeOptions } from '../types';
+import { setTemplatesDirectory } from '../templates';
+import { resetRenderCacheForTests } from '../core/render-cache';
+import { resetConfigForTests } from '../config';
 
 describe('MemeGenerator', () => {
   let generator: MemeGenerator;
+  let tmpDir: string;
+  let origConfigPath: string | undefined;
 
-  beforeEach(() => {
-    generator = new MemeGenerator();
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'meme-gen-'));
+    origConfigPath = process.env.MEME_CONFIG_PATH;
+    process.env.MEME_CONFIG_PATH = path.join(tmpDir, 'meme-config.json');
+    resetConfigForTests();
+    setTemplatesDirectory(tmpDir);
+    resetRenderCacheForTests();
+    // Seed a fake template image so the "exists" check passes.
+    for (const f of [
+      'drake.png',
+      'doge.png',
+      'distracted-boyfriend.png',
+      'two-buttons.png',
+      'change-my-mind.png',
+      'one-does-not-simply.png'
+    ]) {
+      await fs.writeFile(path.join(tmpDir, f), Buffer.from('fake'));
+    }
+    generator = new MemeGenerator(tmpDir);
+  });
+
+  afterEach(async () => {
+    await fs.remove(tmpDir).catch(() => undefined);
+    if (origConfigPath === undefined) delete process.env.MEME_CONFIG_PATH;
+    else process.env.MEME_CONFIG_PATH = origConfigPath;
   });
 
   describe('generateMeme', () => {
-    it('should generate a meme with valid options', async () => {
-      const options: MemeOptions = {
+    it('generates a meme with valid options', async () => {
+      const result = await generator.generateMeme({
         template: 'drake',
         topText: 'Test top text',
-        bottomText: 'Test bottom text',
-      };
-
-      const result = await generator.generateMeme(options);
-
-      expect(result).toBeDefined();
+        bottomText: 'Test bottom text'
+      });
       expect(result.buffer).toBeInstanceOf(Buffer);
       expect(result.format).toBe('png');
       expect(result.template).toBe('drake');
-      expect(result.options).toEqual(options);
     });
 
-    it('should throw error for invalid template', async () => {
-      const options: MemeOptions = {
-        template: 'invalid-template',
-        topText: 'Test',
-      };
-
-      await expect(generator.generateMeme(options)).rejects.toThrow(
-        "Template 'invalid-template' not found"
-      );
+    it('throws for invalid template', async () => {
+      await expect(
+        generator.generateMeme({ template: 'invalid-template', topText: 'x' })
+      ).rejects.toThrow("Template 'invalid-template' not found");
     });
 
-    it('should handle empty text', async () => {
-      const options: MemeOptions = {
+    it('throws if template image is missing on disk', async () => {
+      await fs.remove(path.join(tmpDir, 'drake.png'));
+      resetRenderCacheForTests();
+      await expect(
+        generator.generateMeme({ template: 'drake', topText: 'x' })
+      ).rejects.toThrow(/Template image not found/);
+    });
+
+    it('honors jpeg format', async () => {
+      const r = await generator.generateMeme({
         template: 'drake',
-        topText: '',
-        bottomText: '',
-      };
-
-      const result = await generator.generateMeme(options);
-
-      expect(result).toBeDefined();
-      expect(result.buffer).toBeInstanceOf(Buffer);
+        topText: 'x',
+        format: 'jpeg',
+        quality: 80
+      });
+      expect(r.format).toBe('jpeg');
     });
 
-    it('should handle custom styling options', async () => {
-      const options: MemeOptions = {
+    it('honors webp and avif formats', async () => {
+      const webp = await generator.generateMeme({
         template: 'drake',
-        topText: 'Custom styled',
-        bottomText: 'Meme',
+        topText: 'a',
+        format: 'webp'
+      });
+      expect(webp.format).toBe('webp');
+      const avif = await generator.generateMeme({
+        template: 'doge',
+        topText: 'a',
+        format: 'avif'
+      });
+      expect(avif.format).toBe('avif');
+    });
+
+    it('unknown format falls back to png', async () => {
+      const r = await generator.generateMeme({
+        template: 'drake',
+        topText: 'x',
+        format: 'gif' as unknown as MemeOptions['format']
+      });
+      expect(r.format).toBe('png');
+    });
+
+    it('returns cached result on second identical call', async () => {
+      const opts: MemeOptions = { template: 'drake', topText: 'cached!' };
+      const first = await generator.generateMeme(opts);
+      const second = await generator.generateMeme(opts);
+      expect(second).toBe(first);
+    });
+
+    it('handles empty top/bottom text', async () => {
+      const r = await generator.generateMeme({ template: 'drake', topText: '', bottomText: '' });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+
+    it('honors custom styling', async () => {
+      const r = await generator.generateMeme({
+        template: 'drake',
+        topText: 'Custom',
         fontSize: 50,
-        textColor: '#FF0000',
+        fontFamily: 'Arial',
+        textColor: '#ff0000',
         strokeColor: '#000000',
-        strokeWidth: 3,
-      };
+        strokeWidth: 3
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+  });
 
-      const result = await generator.generateMeme(options);
-
-      expect(result).toBeDefined();
+  describe('generateMemeAndSave', () => {
+    it('writes meme to disk and returns the path', async () => {
+      const outDir = path.join(tmpDir, 'out');
+      process.env.MEME_OUTPUT_DIR = outDir;
+      const { result, filePath } = await generator.generateMemeAndSave({
+        template: 'drake',
+        topText: 'hi'
+      });
       expect(result.buffer).toBeInstanceOf(Buffer);
-      expect(result.options).toEqual(options);
+      expect(filePath).toMatch(/drake-\d+-[0-9a-f]+\.png$/);
+      delete process.env.MEME_OUTPUT_DIR;
+    });
+
+    it('honors caller-supplied filename', async () => {
+      const { filePath } = await generator.generateMemeAndSave(
+        { template: 'drake', topText: 'hi' },
+        'custom-name.png'
+      );
+      expect(filePath.endsWith('custom-name.png')).toBe(true);
     });
   });
 
   describe('generateBatchMemes', () => {
-    it('should generate multiple memes', async () => {
-      const batchOptions = {
+    it('generates multiple memes across templates and texts', async () => {
+      const r = await generator.generateBatchMemes({
         templates: ['drake', 'doge'],
         texts: [
-          { topText: 'Text 1', bottomText: 'Bottom 1' },
-          { topText: 'Text 2', bottomText: 'Bottom 2' },
+          { topText: 'A', bottomText: 'B' },
+          { topText: 'C', bottomText: 'D' }
         ],
-        globalOptions: {
-          fontSize: 40,
-          textColor: '#FFFFFF',
-        },
-      };
-
-      const result = await generator.generateBatchMemes(batchOptions);
-
-      expect(result.results).toHaveLength(4); // 2 templates × 2 texts
-      expect(result.errors).toHaveLength(0);
-      expect(result.results[0].buffer).toBeInstanceOf(Buffer);
+        globalOptions: { fontSize: 40 }
+      });
+      expect(r.results).toHaveLength(4);
+      expect(r.errors).toHaveLength(0);
     });
 
-    it('should handle errors in batch generation', async () => {
-      const batchOptions = {
+    it('captures errors per template', async () => {
+      const r = await generator.generateBatchMemes({
         templates: ['drake', 'invalid-template'],
-        texts: [{ topText: 'Test' }],
-      };
+        texts: [{ topText: 'x' }]
+      });
+      expect(r.results).toHaveLength(1);
+      expect(r.errors).toHaveLength(1);
+      expect(r.errors[0].template).toBe('invalid-template');
+    });
+  });
 
-      const result = await generator.generateBatchMemes(batchOptions);
+  describe('generateBatchMemesAndSave', () => {
+    it('writes every meme to disk with unique names', async () => {
+      const outDir = path.join(tmpDir, 'batch-out');
+      const r = await generator.generateBatchMemesAndSave({
+        templates: ['drake', 'doge'],
+        texts: [{ topText: 'a' }, { topText: 'b' }],
+        outputDirectory: outDir
+      });
+      expect(r.results).toHaveLength(4);
+      const filenames = r.results.map((x) => path.basename(x.filePath));
+      expect(new Set(filenames).size).toBe(filenames.length);
+    });
 
-      expect(result.results).toHaveLength(1); // Only drake template works
-      expect(result.errors).toHaveLength(1); // invalid-template fails
-      expect(result.errors[0].template).toBe('invalid-template');
+    it('captures per-template errors', async () => {
+      const outDir = path.join(tmpDir, 'batch-out-err');
+      const r = await generator.generateBatchMemesAndSave({
+        templates: ['invalid-template'],
+        texts: [{ topText: 'x' }],
+        outputDirectory: outDir
+      });
+      expect(r.errors).toHaveLength(1);
+    });
+  });
+
+  describe('addCustomTemplate', () => {
+    it('copies image, writes JSON, and makes the template usable', async () => {
+      const seed = path.join(tmpDir, 'seed.png');
+      await fs.writeFile(seed, Buffer.from('fake'));
+
+      await generator.addCustomTemplate(
+        'custom-add',
+        seed,
+        { top: { x: 0, y: 0, width: 10, height: 10 } },
+        { description: 'desc', tags: ['a'] }
+      );
+
+      // File should exist in custom/ subdir
+      expect(await fs.pathExists(path.join(tmpDir, 'custom', 'custom-add.png'))).toBe(true);
+      // Registry should pick it up
+      expect(generator.getAvailableTemplates()).toContain('custom-add');
+    });
+
+    it('throws if source image does not exist', async () => {
+      await expect(
+        generator.addCustomTemplate('x', path.join(tmpDir, 'nope.png'), {})
+      ).rejects.toThrow(/Image file not found/);
     });
   });
 
   describe('getAvailableTemplates', () => {
-    it('should return list of available templates', () => {
-      const templates = generator.getAvailableTemplates();
-
-      expect(Array.isArray(templates)).toBe(true);
-      expect(templates).toContain('drake');
-      expect(templates).toContain('doge');
-      expect(templates).toContain('distracted-boyfriend');
+    it('returns list containing built-ins', () => {
+      const names = generator.getAvailableTemplates();
+      expect(names).toEqual(expect.arrayContaining(['drake', 'doge', 'distracted-boyfriend']));
     });
   });
 });
