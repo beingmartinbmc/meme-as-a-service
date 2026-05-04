@@ -10,6 +10,7 @@ export const BUILTIN_MEME_TEMPLATES: Record<string, MemeTemplate> = {
     height: 1200,
     description: 'Drake disapproving/approving meme',
     tags: ['drake', 'hotline', 'bling', 'approval'],
+    keywords: ['prefer', 'rather', 'yes', 'no', 'vs', 'versus', 'choice'],
     textBoxes: {
       top: {
         x: 600,
@@ -44,6 +45,7 @@ export const BUILTIN_MEME_TEMPLATES: Record<string, MemeTemplate> = {
     height: 800,
     description: 'Distracted boyfriend looking at another woman',
     tags: ['boyfriend', 'distracted', 'cheating'],
+    keywords: ['temptation', 'new thing', 'shiny', 'stack overflow'],
     textBoxes: {
       top: {
         x: 200,
@@ -78,6 +80,7 @@ export const BUILTIN_MEME_TEMPLATES: Record<string, MemeTemplate> = {
     height: 600,
     description: 'Much wow, very doge',
     tags: ['doge', 'shibe', 'wow'],
+    keywords: ['wow', 'such', 'very', 'much', 'shibe', 'dog'],
     textBoxes: {
       top: {
         x: 400,
@@ -112,6 +115,7 @@ export const BUILTIN_MEME_TEMPLATES: Record<string, MemeTemplate> = {
     height: 600,
     description: 'Two buttons meme',
     tags: ['buttons', 'choice', 'decision'],
+    keywords: ['sweating', 'press', 'either', 'or', 'dilemma'],
     textBoxes: {
       top: {
         x: 500,
@@ -146,6 +150,7 @@ export const BUILTIN_MEME_TEMPLATES: Record<string, MemeTemplate> = {
     height: 600,
     description: 'Steven Crowder change my mind meme',
     tags: ['crowder', 'change', 'mind', 'debate'],
+    keywords: ['prove', 'opinion', 'argue', 'hot take'],
     textBoxes: {
       top: {
         x: 500,
@@ -168,6 +173,7 @@ export const BUILTIN_MEME_TEMPLATES: Record<string, MemeTemplate> = {
     height: 600,
     description: 'Boromir one does not simply meme',
     tags: ['boromir', 'lotr', 'simply'],
+    keywords: ['mordor', 'cannot', 'impossible', 'lord of the rings'],
     textBoxes: {
       top: {
         x: 400,
@@ -267,14 +273,30 @@ export function listTemplates(): string[] {
   return Object.keys(getAllTemplates());
 }
 
+/**
+ * Ranked search across name, description, tags, and keywords. Exact id matches
+ * sort highest, then name substring, then keyword/tag hits, then description.
+ * Returns only matches (score > 0).
+ */
 export function searchTemplates(query: string): string[] {
-  const searchTerm = query.toLowerCase();
-  return Object.entries(getAllTemplates())
-    .filter(([key, template]) =>
-      key.toLowerCase().includes(searchTerm) ||
-      template.name.toLowerCase().includes(searchTerm) ||
-      template.description?.toLowerCase().includes(searchTerm) ||
-      template.tags?.some((tag) => tag.toLowerCase().includes(searchTerm))
-    )
-    .map(([key]) => key);
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const scored: Array<{ key: string; score: number }> = [];
+
+  for (const [key, tpl] of Object.entries(getAllTemplates())) {
+    let score = 0;
+    const keyL = key.toLowerCase();
+    const nameL = tpl.name.toLowerCase();
+    if (keyL === q) score += 100;
+    else if (keyL.includes(q)) score += 40;
+    if (nameL.includes(q)) score += 25;
+    if (tpl.tags?.some((t) => t.toLowerCase().includes(q))) score += 10;
+    if (tpl.keywords?.some((k) => k.toLowerCase().includes(q))) score += 10;
+    if (tpl.description?.toLowerCase().includes(q)) score += 5;
+    if (score > 0) scored.push({ key, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
+  return scored.map((s) => s.key);
 }

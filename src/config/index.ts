@@ -17,7 +17,10 @@ export class ConfigManager {
   private config: MemeConfig;
 
   constructor(configPath?: string) {
-    this.configPath = configPath || path.join(process.cwd(), 'meme-config.json');
+    this.configPath =
+      configPath ||
+      process.env.MEME_CONFIG_PATH ||
+      path.join(process.cwd(), 'meme-config.json');
     this.config = { ...DEFAULT_CONFIG };
   }
 
@@ -82,4 +85,8 @@ export async function getConfig(): Promise<ConfigManager> {
 export async function getConfigValue(): Promise<MemeConfig> {
   const config = await getConfig();
   return config.get();
+}
+
+export function resetConfigForTests(): void {
+  configManager = null;
 }
