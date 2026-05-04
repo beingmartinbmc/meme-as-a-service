@@ -1,3 +1,19 @@
+jest.mock('fs-extra', () => {
+  const actual = jest.requireActual('fs-extra');
+  // Only lie about template PNGs not existing on disk in CI. Everything
+  // else (custom-templates.json, seed files the test itself creates)
+  // must go through the real filesystem or nothing works.
+  return {
+    ...actual,
+    pathExists: jest.fn(async (p: string) => {
+      if (typeof p === 'string' && /\.png$/i.test(p) && p.includes('/templates/')) {
+        return true;
+      }
+      return actual.pathExists(p);
+    })
+  };
+});
+
 import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';

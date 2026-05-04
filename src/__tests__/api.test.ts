@@ -11,6 +11,23 @@ jest.mock('../index', () => {
   };
 });
 
+// In CI the real template PNGs aren't on disk (setup-real isn't run before
+// tests). Pretend template image files always exist so generateMeme doesn't
+// 500 on `fs.pathExists`. Doesn't affect templates.test.ts or
+// dynamic-loader.test.ts since jest.mock is module-scoped.
+jest.mock('fs-extra', () => {
+  const actual = jest.requireActual('fs-extra');
+  return {
+    ...actual,
+    pathExists: jest.fn(async (p: string) => {
+      if (typeof p === 'string' && /\.png$/i.test(p) && p.includes('/templates/')) {
+        return true;
+      }
+      return actual.pathExists(p);
+    })
+  };
+});
+
 import app from '../api/server';
 
 describe('API server', () => {
