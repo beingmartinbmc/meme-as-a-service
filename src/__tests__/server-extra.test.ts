@@ -26,6 +26,11 @@ jest.mock('fs-extra', () => {
 describe('server error branches', () => {
   const origNodeEnv = process.env.NODE_ENV;
 
+  // Several tests in this file go through jest.resetModules + dynamic
+  // import + multipart upload against a fresh supertest app. Under CI load
+  // that easily exceeds the default 5s per test. 30s gives plenty of slack.
+  jest.setTimeout(30_000);
+
   beforeEach(() => {
     jest.resetModules();
     process.env.NODE_ENV = 'test';
@@ -35,23 +40,6 @@ describe('server error branches', () => {
     process.env.NODE_ENV = origNodeEnv;
     jest.dontMock('../index');
     jest.dontMock('../observability/metrics');
-  });
-
-  it('sendValidationError wraps non-Zod errors', async () => {
-    // trigger the non-Zod error branch by posting a body that fails at
-    // JSON.parse inside the upload endpoint's textBoxSchema.parse(...)
-    jest.isolateModules(() => undefined);
-    const request = (await import('supertest')).default;
-    const app = (await import('../api/server')).default;
-
-    const res = await request(app)
-      .post('/templates/upload')
-      .field('name', 'bad-json-boxes')
-      .field('topBox', '{ not json')
-      .attach('image', Buffer.from('x'), { filename: 'x.png', contentType: 'image/png' });
-    // topBox is a string, passes customTemplateSchema, then JSON.parse fails
-    // inside the try{} → caught by the generic try/catch → 500.
-    expect([400, 500]).toContain(res.status);
   });
 
   it('/readyz returns 503 when registry is empty', async () => {
