@@ -9,8 +9,10 @@ import {
   invalidateCustomTemplatesCache,
   listTemplates
 } from '../templates';
-import { sanitizeText, wrapText } from '../utils/text';
+import { sanitizeText, wrapText, calculateFontSize } from '../utils/text';
 import { getConfig } from '../config';
+import { getCachedRender, setCachedRender } from './render-cache';
+import { memesRenderedTotal, memeRenderDurationSeconds } from '../observability/metrics';
 
 const DEFAULT_FONT_STACK = 'Impact, \'Anton\', \'Oswald\', \'Helvetica Neue\', Helvetica, Arial, sans-serif';
 
@@ -48,44 +50,62 @@ export class MemeGenerator {
   }
 
   async generateMeme(options: MemeOptions): Promise<MemeResult> {
-    const template = getTemplate(options.template);
-    if (!template) {
-      throw new Error(`Template '${options.template}' not found`);
+    const cached = getCachedRender(options);
+    if (cached) {
+      memesRenderedTotal.inc({ template: options.template, cached: 'true' });
+      return cached;
     }
 
-    const imagePath = path.join(this.templatesPath, template.imagePath);
-    if (!(await fs.pathExists(imagePath))) {
-      throw new Error(`Template image not found: ${imagePath}`);
-    }
+    const endTimer = memeRenderDurationSeconds.startTimer({
+      template: options.template
+    });
 
-    const image = sharp(imagePath);
-    const metadata = await image.metadata();
-
-    if (!metadata.width || !metadata.height) {
-      throw new Error('Invalid image metadata');
-    }
-
-    const svgOverlay = this.createTextOverlay(template, options, metadata.width, metadata.height);
-    const format = normalizeFormat(options.format);
-
-    const composed = image.composite([
-      {
-        input: Buffer.from(svgOverlay),
-        top: 0,
-        left: 0
+    try {
+      const template = getTemplate(options.template);
+      if (!template) {
+        throw new Error(`Template '${options.template}' not found`);
       }
-    ]);
 
-    const buffer = await encode(composed, format, options.quality).toBuffer();
+      const imagePath = path.join(this.templatesPath, template.imagePath);
+      if (!(await fs.pathExists(imagePath))) {
+        throw new Error(`Template image not found: ${imagePath}`);
+      }
 
-    return {
-      buffer,
-      format: format === 'jpg' ? 'jpeg' : format,
-      width: metadata.width,
-      height: metadata.height,
-      template: options.template,
-      options
-    };
+      const image = sharp(imagePath);
+      const metadata = await image.metadata();
+
+      if (!metadata.width || !metadata.height) {
+        throw new Error('Invalid image metadata');
+      }
+
+      const svgOverlay = this.createTextOverlay(template, options, metadata.width, metadata.height);
+      const format = normalizeFormat(options.format);
+
+      const composed = image.composite([
+        {
+          input: Buffer.from(svgOverlay),
+          top: 0,
+          left: 0
+        }
+      ]);
+
+      const buffer = await encode(composed, format, options.quality).toBuffer();
+
+      const result: MemeResult = {
+        buffer,
+        format: format === 'jpg' ? 'jpeg' : format,
+        width: metadata.width,
+        height: metadata.height,
+        template: options.template,
+        options
+      };
+
+      setCachedRender(options, result);
+      memesRenderedTotal.inc({ template: options.template, cached: 'false' });
+      return result;
+    } finally {
+      endTimer();
+    }
   }
 
   async generateMemeAndSave(options: MemeOptions, filename?: string): Promise<{ result: MemeResult; filePath: string }> {
@@ -96,7 +116,8 @@ export class MemeGenerator {
     await config.ensureOutputDirectory();
 
     const ext = result.format === 'jpeg' ? 'jpg' : result.format;
-    const outputFilename = filename || `${options.template}-${Date.now()}.${ext}`;
+    const rand = crypto.randomBytes(4).toString('hex');
+    const outputFilename = filename || `${options.template}-${Date.now()}-${rand}.${ext}`;
     const outputPath = path.join(config.getOutputDirectory(), outputFilename);
 
     // Save the meme
@@ -128,9 +149,18 @@ export class MemeGenerator {
 
     const renderBox = (box: TextBox, text: string, anchor: 'top' | 'bottom') => {
       const cx = (box.x + box.width / 2) * scaleX;
-      const fontSize = (box.fontSize || baseFontSize) * scale;
-      const lineHeight = fontSize * 1.15;
+      const requestedSize = (box.fontSize || baseFontSize) * scale;
       const maxWidth = (box.maxWidth || box.width) * scaleX;
+      const maxHeight = box.height * scaleY;
+      // Auto-shrink so long captions don't spill out of the box.
+      const fontSize = calculateFontSize(
+        text,
+        maxWidth,
+        maxHeight,
+        Math.max(12, Math.floor(requestedSize * 0.35)),
+        Math.ceil(requestedSize)
+      );
+      const lineHeight = fontSize * 1.15;
       const lines = wrapText(text, maxWidth, fontSize);
       const totalHeight = lines.length * lineHeight;
 
