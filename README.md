@@ -275,15 +275,47 @@ src/
 - `template add/remove/list-custom` - Manage templates
 
 ### API Endpoints
-- `GET  /health` - Health check
-- `GET  /docs` - Swagger UI
-- `GET  /openapi.json` - OpenAPI 3 spec
-- `GET  /templates` - List templates
-- `GET  /templates/:template` - Get template info
-- `GET  /meme/:template` - Generate meme (query params)
-- `POST /meme/:template` - Generate meme (JSON body)
-- `POST /meme/batch` - Batch generation (`outputFormat: "json" | "zip"`)
-- `POST /templates/upload` - Add custom template (multipart)
+- `GET  /healthz`, `/health` – Liveness probe
+- `GET  /readyz` – Readiness probe (verifies template registry)
+- `GET  /metrics` – Prometheus metrics
+- `GET  /docs` – Swagger UI (assets bundled locally)
+- `GET  /openapi.json` – OpenAPI 3 spec (generated from zod schemas)
+- `GET  /templates` – List templates (`?search=` does ranked search)
+- `GET  /templates/:template` – Get template info
+- `GET  /meme/:template` – Generate meme (query params, incl. `lines`, `background`)
+- `POST /meme/:template` – Generate meme (JSON body)
+- `POST /meme/batch` – Batch generation (`outputFormat: "json" | "zip"`)
+- `POST /templates/upload` – Add custom template (multipart)
+- `GET  /images/:template/:line1/:line2.png` – Shareable URL-as-state route
+- `GET  /preview/:template` – Small WebP thumbnail of a template
+
+#### URL-as-state encoding (memegen.link style)
+Segments in `/images/...` are decoded with:
+
+| In URL | Becomes |
+| --- | --- |
+| `_` | space |
+| `__` | `_` |
+| `--` | `-` |
+| `~q` | `?` |
+| `~a` | `&` |
+| `~p` | `%` |
+| `~h` | `#` |
+| `~s` | `/` |
+| `~l` / `~g` | `<` / `>` |
+| `~d` / `~r` | `"` / `'` |
+| `~n` | newline |
+| `~~` | `~` |
+
+`:shortcode:` sequences like `:fire:` / `:thumbsup:` / `:100:` / `:heart:` are replaced with their emoji in any rendered text.
+
+#### Env-configurable behavior
+- `API_KEYS` – comma-separated keys. When set, `/meme` and `/templates/upload` require `x-api-key`.
+- `CORS_ORIGINS` – comma-separated origin allowlist. Unset → wildcard.
+- `MEME_CACHE_SIZE`, `MEME_CACHE_MAX_BYTES` – LRU render-cache limits.
+- `MEME_BG_MAX_BYTES` – max size for `background=<url>` downloads.
+- `SHUTDOWN_DELAY_MS` – drain time on SIGTERM/SIGINT (default 10s).
+- `LOG_LEVEL` – pino level (default `info` in prod, `debug` in dev, `silent` in tests).
 
 ### Docker
 
