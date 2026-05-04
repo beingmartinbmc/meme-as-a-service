@@ -1,3 +1,16 @@
+jest.mock('fs-extra', () => {
+  const actual = jest.requireActual('fs-extra');
+  return {
+    ...actual,
+    pathExists: jest.fn(async (p: string) => {
+      if (typeof p === 'string' && /\.png$/i.test(p) && p.includes('/templates/')) {
+        return true;
+      }
+      return actual.pathExists(p);
+    })
+  };
+});
+
 /**
  * Covers branches in api/server.ts that the happy-path api.test.ts doesn't hit:
  *   - sendValidationError(non-Zod error)
