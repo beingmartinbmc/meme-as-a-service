@@ -52,8 +52,26 @@ describe('templates registry', () => {
     expect(searchTemplates('doge')).toContain('doge');
   });
 
+  it('searchTemplates matches keywords', () => {
+    expect(searchTemplates('mordor')).toContain('one-does-not-simply');
+    expect(searchTemplates('such')).toContain('doge');
+    expect(searchTemplates('versus')).toContain('drake');
+  });
+
   it('searchTemplates returns empty array for no matches', () => {
     expect(searchTemplates('zzzzzz-none')).toEqual([]);
+  });
+
+  it('searchTemplates returns empty array for empty/whitespace input', () => {
+    expect(searchTemplates('')).toEqual([]);
+    expect(searchTemplates('   ')).toEqual([]);
+  });
+
+  it('searchTemplates ranks exact id matches first', () => {
+    // "drake" is a template id, and also appears in tags of itself; the
+    // exact-id match should place it first.
+    const hits = searchTemplates('drake');
+    expect(hits[0]).toBe('drake');
   });
 
   it('loads custom-templates.json from disk', async () => {

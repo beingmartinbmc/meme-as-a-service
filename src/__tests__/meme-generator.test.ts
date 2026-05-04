@@ -227,4 +227,78 @@ describe('MemeGenerator', () => {
       expect(names).toEqual(expect.arrayContaining(['drake', 'doge', 'distracted-boyfriend']));
     });
   });
+
+  describe('lines[] option', () => {
+    it('uses lines instead of top/bottom when supplied', async () => {
+      const r = await generator.generateMeme({
+        template: 'drake',
+        lines: ['first line', 'second line']
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+
+    it('accepts empty strings in lines without crashing', async () => {
+      const r = await generator.generateMeme({
+        template: 'drake',
+        lines: ['', 'only bottom']
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+
+    it('accepts more lines than template boxes (extras ignored)', async () => {
+      const r = await generator.generateMeme({
+        template: 'drake',
+        lines: ['a', 'b', 'c', 'd']
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+  });
+
+  describe('per-line colors', () => {
+    it('accepts an array of text colors', async () => {
+      const r = await generator.generateMeme({
+        template: 'drake',
+        lines: ['red', 'blue'],
+        textColor: ['#ff0000', '#0000ff']
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+
+    it('cycles colors when fewer than lines', async () => {
+      const r = await generator.generateMeme({
+        template: 'drake',
+        lines: ['one', 'two'],
+        textColor: ['#ff0000'],
+        strokeColor: ['#000000']
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+  });
+
+  describe('background overlay', () => {
+    it('accepts a local file path as background', async () => {
+      const bg = path.join(tmpDir, 'bg.png');
+      await fs.writeFile(bg, Buffer.from('bg-bytes'));
+      const r = await generator.generateMeme({
+        template: 'drake',
+        topText: 'over',
+        bottomText: 'custom bg',
+        background: bg
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+
+    it('still renders when template image is absent, as long as background is set', async () => {
+      await fs.remove(path.join(tmpDir, 'drake.png'));
+      resetRenderCacheForTests();
+      const bg = path.join(tmpDir, 'bg.png');
+      await fs.writeFile(bg, Buffer.from('bg-bytes'));
+      const r = await generator.generateMeme({
+        template: 'drake',
+        topText: 'hi',
+        background: bg
+      });
+      expect(r.buffer).toBeInstanceOf(Buffer);
+    });
+  });
 });

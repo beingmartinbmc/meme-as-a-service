@@ -31,6 +31,7 @@ import { apiKeyAuth } from './middleware/api-key';
 import { requestId } from './middleware/request-id';
 import { logger } from '../observability/logger';
 import { metricsText, httpRequestsTotal } from '../observability/metrics';
+import { splitMemePath, decodeMemeSegment } from '../utils/url-encoding';
 
 import pkg from '../../package.json';
 
@@ -269,6 +270,73 @@ app.post('/meme/batch', batchLimiter, apiKeyAuth, async (req, res) => {
   });
 });
 
+// URL-as-state: /images/:template/line1/line2.(png|jpeg|webp|avif)
+// Makes memes shareable as plain URLs. Encoding rules live in utils/url-encoding.ts.
+app.get('/images/:template/*', generateLimiter, apiKeyAuth, async (req, res) => {
+  let templateName: string;
+  try {
+    templateName = templateNameSchema.parse(req.params.template);
+  } catch (err) {
+    return sendValidationError(res, err);
+  }
+
+  const tail = (req.params as Record<string, string>)[0] || '';
+  const { segments, ext } = splitMemePath(tail);
+  const lines = segments.map((s) => decodeMemeSegment(s));
+  const fmt = (ext && MIME_BY_FORMAT[ext] ? ext : 'png').toLowerCase();
+
+  try {
+    const buffer = await generateMeme({
+      template: templateName,
+      lines,
+      format: fmt as MemeOptions['format']
+    });
+    const outFmt = fmt === 'jpg' ? 'jpeg' : fmt;
+    const outExt = outFmt === 'jpeg' ? 'jpg' : outFmt;
+    res.setHeader('Content-Type', MIME_BY_FORMAT[outFmt] || 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="${templateName}-meme.${outExt}"`);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.send(buffer);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to generate meme',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Preview endpoint: small thumbnail of a template with example text.
+app.get('/preview/:template', async (req, res) => {
+  let templateName: string;
+  try {
+    templateName = templateNameSchema.parse(req.params.template);
+  } catch (err) {
+    return sendValidationError(res, err);
+  }
+
+  try {
+    const info = getTemplateInfo(templateName);
+    if (!info) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    const buffer = await generateMeme({
+      template: templateName,
+      topText: 'top text',
+      bottomText: 'bottom text',
+      format: 'webp',
+      quality: 70
+    });
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(buffer);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to generate preview',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 // Generate meme via query params
 app.get('/meme/:template', generateLimiter, apiKeyAuth, async (req, res) => {
   let templateName: string;
@@ -278,18 +346,26 @@ app.get('/meme/:template', generateLimiter, apiKeyAuth, async (req, res) => {
     return sendValidationError(res, err);
   }
 
+  const lines = Array.isArray(req.query.lines)
+    ? (req.query.lines as string[])
+    : typeof req.query.lines === 'string'
+      ? req.query.lines.split('|').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
   let validated;
   try {
     validated = memeOptionsSchema.parse({
       topText: req.query.top,
       bottomText: req.query.bottom,
+      lines,
       fontSize: req.query.fontSize,
       fontFamily: req.query.fontFamily,
       textColor: req.query.color,
       strokeColor: req.query.stroke,
       strokeWidth: req.query.strokeWidth,
       format: req.query.format,
-      quality: req.query.quality
+      quality: req.query.quality,
+      background: req.query.background
     });
   } catch (err) {
     return sendValidationError(res, err);
