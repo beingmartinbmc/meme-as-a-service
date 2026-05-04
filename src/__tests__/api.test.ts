@@ -292,6 +292,74 @@ describe('API server', () => {
     expect([400, 500]).toContain(res.status);
   });
 
+  it('GET /images/:template/:line1/:line2.png renders', async () => {
+    const res = await request(app).get('/images/drake/hello_world/its_working~q.png');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/png');
+  });
+
+  it('GET /images/:template/... defaults to png when no extension', async () => {
+    const res = await request(app).get('/images/drake/foo/bar');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/png');
+  });
+
+  it('GET /images/:template/...webp honors the extension', async () => {
+    const res = await request(app).get('/images/drake/foo/bar.webp');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/webp');
+  });
+
+  it('GET /images/:template rejects bad template name', async () => {
+    const res = await request(app).get('/images/bad!name/x.png');
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /images/:template 500s for missing template', async () => {
+    const res = await request(app).get('/images/does-not-exist/x.png');
+    expect(res.status).toBe(500);
+  });
+
+  it('GET /preview/:template returns a webp thumbnail', async () => {
+    const res = await request(app).get('/preview/drake');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/webp');
+  });
+
+  it('GET /preview/:template returns 404 for unknown template', async () => {
+    const res = await request(app).get('/preview/nope-nope');
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /preview/:template rejects bad template name', async () => {
+    const res = await request(app).get('/preview/bad!name');
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /meme/:template accepts pipe-separated lines= param', async () => {
+    const res = await request(app).get('/meme/drake').query({ lines: 'first|second' });
+    expect(res.status).toBe(200);
+  });
+
+  it('GET /meme/:template accepts repeated lines= param', async () => {
+    const res = await request(app).get('/meme/drake?lines=first&lines=second');
+    expect(res.status).toBe(200);
+  });
+
+  it('POST /meme/:template accepts per-line color arrays', async () => {
+    const res = await request(app)
+      .post('/meme/drake')
+      .send({ lines: ['a', 'b'], textColor: ['#ff0000', '#00ff00'] });
+    expect(res.status).toBe(200);
+  });
+
+  it('POST /meme/:template accepts comma-separated color string', async () => {
+    const res = await request(app)
+      .post('/meme/drake')
+      .send({ lines: ['a', 'b'], textColor: '#ff0000,#00ff00' });
+    expect(res.status).toBe(200);
+  });
+
   it('POST /templates/upload with top/bottom boxes succeeds', async () => {
     const res = await request(app)
       .post('/templates/upload')

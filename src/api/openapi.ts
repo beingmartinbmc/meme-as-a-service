@@ -166,6 +166,41 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: 'get',
+  path: '/images/{template}/{segments}',
+  summary: 'Generate a meme via URL-as-state path (shareable)',
+  description:
+    'Path segments are decoded using memegen-style escapes: underscores → spaces, ~q → ?, ~n → newline, ~a → &, ~p → %, ~h → #, ~s → /, ~l → <, ~g → >, ~d → ", ~r → \'. The final segment may include an extension (.png/.jpeg/.webp/.avif) to pick the output format.',
+  request: {
+    params: z.object({
+      template: templateNameSchema,
+      segments: z.string().openapi({ description: 'Path tail like line1/line2.png' })
+    })
+  },
+  responses: {
+    200: { description: 'Generated meme image' },
+    400: {
+      description: 'Validation error',
+      content: { 'application/json': { schema: ValidationErrorResponse } }
+    }
+  }
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/preview/{template}',
+  summary: 'Small thumbnail preview of a template with sample text',
+  request: { params: z.object({ template: templateNameSchema }) },
+  responses: {
+    200: {
+      description: 'WebP thumbnail',
+      content: { 'image/webp': { schema: z.string().openapi({ format: 'binary' }) } }
+    },
+    404: { description: 'Template not found' }
+  }
+});
+
+registry.registerPath({
   method: 'post',
   path: '/meme/{template}',
   summary: 'Generate a meme via JSON body',
